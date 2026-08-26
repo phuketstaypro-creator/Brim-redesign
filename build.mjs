@@ -2,7 +2,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import zlib from 'node:zlib';
 
-const payloadDir = path.join(process.cwd(), 'payload');
+const cwd = process.cwd();
+const payloadDir = path.join(cwd, 'payload');
 const encoded = fs.readdirSync(payloadDir)
   .filter((name) => name.endsWith('.b64'))
   .sort()
@@ -10,8 +11,20 @@ const encoded = fs.readdirSync(payloadDir)
   .join('')
   .replace(/\s+/g, '');
 
-const html = zlib.gunzipSync(Buffer.from(encoded, 'base64'));
-const outDir = path.join(process.cwd(), 'dist');
+const sourceHtml = zlib.gunzipSync(Buffer.from(encoded, 'base64')).toString('utf8');
+const mobileCss = fs.readFileSync(path.join(cwd, 'patches', 'mobile-layout.css'), 'utf8');
+const mobileJs = fs.readFileSync(path.join(cwd, 'patches', 'mobile-menu.js'), 'utf8');
+const mobilePatch = `\n<!-- MOBILE-LAYOUT-V2 START -->\n<style id="mobile-layout-v2">${mobileCss}</style>\n<script id="mobile-layout-controller-v2">${mobileJs}</script>\n<!-- MOBILE-LAYOUT-V2 END -->\n`;
+
+const html = sourceHtml.includes('MOBILE-LAYOUT-V2 START')
+  ? sourceHtml
+  : sourceHtml.replace('</head>', `${mobilePatch}</head>`);
+
+if (html === sourceHtml && !sourceHtml.includes('MOBILE-LAYOUT-V2 START')) {
+  throw new Error('Could not inject the mobile layout patch: closing head tag is missing.');
+}
+
+const outDir = path.join(cwd, 'dist');
 fs.rmSync(outDir, { recursive: true, force: true });
 fs.mkdirSync(outDir, { recursive: true });
 
@@ -58,10 +71,9 @@ for (const route of routes) {
   fs.writeFileSync(path.join(routeDir, 'index.html'), html);
 }
 
-const notFound = html.replace(
-  '<title>БРХК — новая версия сайта</title>',
-  '<title>Страница не найдена — БРХК</title>'
-);
+const notFound = html
+  .replace('<title>БРХК — новая версия сайта</title>', '<title>Страница не найдена — БРХК</title>')
+  .replace('<title>БРХК — новая сцена начинается здесь</title>', '<title>Страница не найдена — БРХК</title>');
 fs.writeFileSync(path.join(outDir, '404.html'), notFound);
 fs.writeFileSync(
   path.join(outDir, 'robots.txt'),
@@ -80,4 +92,4 @@ fs.writeFileSync(
   '<?xml version="1.0" encoding="UTF-8"?><rss version="2.0"><channel><title>Новости БРХК</title><link>https://brim-redesign.vercel.app/news/</link><description>Демонстрационная RSS-лента. Подключается к действующей CMS колледжа.</description></channel></rss>'
 );
 
-console.log(`Built ${routes.length} physical routes from ${html.length} bytes into dist/`);
+console.log(`Built ${routes.length} physical routes from ${Buffer.byteLength(html)} bytes into dist/`);
