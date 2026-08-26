@@ -1,0 +1,119 @@
+name: Import verified V4 preview into production source
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'ops/import-v4-preview.txt'
+
+permissions:
+  contents: write
+
+jobs:
+  import-v4:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download authenticated V4 static export
+        shell: bash
+        env:
+          BASE_URL: https://brim-redesign-v4-test-jvo27c0ch-alexs-projects-1afb20f9.vercel.app
+          SHARE_TOKEN: BaYCg48QhQFRnBWNKwJqMrzs4A6Ov8CU
+        run: |
+          set -euo pipefail
+          rm -rf dist-v4
+          mkdir -p dist-v4
+          COOKIE_JAR=/tmp/vercel-cookies.txt
+
+          curl --fail --silent --show-error --location \
+            --cookie-jar "$COOKIE_JAR" --cookie "$COOKIE_JAR" \
+            "$BASE_URL/?_vercel_share=$SHARE_TOKEN" \
+            --output dist-v4/index.html
+
+          grep -Fq '<title>Сцена начинается здесь — БРХК</title>' dist-v4/index.html
+          grep -Fq 'class="hero-media"' dist-v4/index.html
+
+          routes=(
+            about accessibility admission ballet-for-all consent contacts
+            creative-industries documents education events gallery news privacy students sveden
+            news/alina-dorzhu-bolshie-i-malenkie
+            news/altargana-2026
+            news/balet-na-baikale
+            news/master-klass-po-valsu
+            sveden/budget sveden/catering sveden/common sveden/document
+            sveden/eduStandarts sveden/education sveden/employees sveden/grants
+            sveden/inter sveden/objects sveden/ovz sveden/paid_edu
+            sveden/struct sveden/vacant
+          )
+
+          for route in "${routes[@]}"; do
+            mkdir -p "dist-v4/$route"
+            curl --fail --silent --show-error --location \
+              --cookie "$COOKIE_JAR" \
+              "$BASE_URL/$route/" \
+              --output "dist-v4/$route/index.html"
+            grep -Fq '<!doctype html>' "dist-v4/$route/index.html"
+          done
+
+          mkdir -p dist-v4/assets/images
+          for asset in assets/styles.css assets/app.js assets/logo.svg \
+            assets/images/hero-stage-mobile.webp \
+            assets/images/hero-stage.webp \
+            assets/images/stage-ensemble.webp \
+            assets/images/stage-poster.webp \
+            assets/images/studio-tutu.webp \
+            robots.txt sitemap.xml rss.xml manifest.webmanifest 404.html; do
+            mkdir -p "dist-v4/$(dirname "$asset")"
+            curl --fail --silent --show-error --location \
+              --cookie "$COOKIE_JAR" \
+              "$BASE_URL/$asset" \
+              --output "dist-v4/$asset"
+            test -s "dist-v4/$asset"
+          done
+
+          test "$(find dist-v4 -name index.html | wc -l)" -ge 34
+          test -s dist-v4/assets/images/hero-stage.webp
+
+      - name: Configure Vercel for committed static export
+        shell: bash
+        run: |
+          cat > vercel.json <<'JSON'
+          {
+            "$schema": "https://openapi.vercel.sh/vercel.json",
+            "buildCommand": "echo 'Using committed BRHK V4 static export'",
+            "outputDirectory": "dist-v4",
+            "cleanUrls": true,
+            "trailingSlash": true,
+            "headers": [
+              {
+                "source": "/(.*)",
+                "headers": [
+                  { "key": "X-Content-Type-Options", "value": "nosniff" },
+                  { "key": "X-Frame-Options", "value": "SAMEORIGIN" },
+                  { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" },
+                  { "key": "Permissions-Policy", "value": "camera=(), microphone=(), geolocation=(), payment=(), usb=()" },
+                  { "key": "Cross-Origin-Opener-Policy", "value": "same-origin-allow-popups" }
+                ]
+              },
+              {
+                "source": "/assets/(.*)",
+                "headers": [
+                  { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
+                ]
+              }
+            ]
+          }
+          JSON
+
+      - name: Commit V4 static export to main
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add dist-v4 vercel.json
+          git commit -m 'Deploy BRHK V4 real redesign to production'
+          git push origin HEAD:main
