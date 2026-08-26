@@ -1,0 +1,104 @@
+name: Patch V3 mobile layout
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'ops/mobile-layout-trigger.txt'
+
+permissions:
+  contents: write
+
+jobs:
+  patch-mobile-layout:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out actual V3 source branch
+        uses: actions/checkout@v4
+        with:
+          ref: fix/v3-multipage
+          fetch-depth: 0
+
+      - name: Inject responsive layout and stable mobile navigation
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          path = Path('index.html')
+          source = path.read_text(encoding='utf-8')
+          start = '<!-- MOBILE-LAYOUT-V2 START -->'
+          end = '<!-- MOBILE-LAYOUT-V2 END -->'
+          source = re.sub(
+              rf'\s*{re.escape(start)}.*?{re.escape(end)}\s*',
+              '\n',
+              source,
+              flags=re.S,
+          )
+
+          patch = r'''
+          <!-- MOBILE-LAYOUT-V2 START -->
+          <style id="mobile-layout-v2">
+          html,body{max-width:100%;overflow-x:hidden}img,svg,video{max-width:100%}
+          @media(max-width:860px){
+            .wrap{width:calc(100% - 32px)!important}
+            .gov{position:relative;z-index:90}.govin{min-height:44px!important;gap:6px;padding:4px 0}.govin>span{display:none}.govin>div{display:flex;width:100%;align-items:center;justify-content:flex-start;gap:18px;overflow-x:auto}.tool{white-space:nowrap;font-size:.9rem;padding:8px 0}
+            header{top:0}.head{min-height:78px!important;gap:12px!important}.brand{min-width:0!important;flex:1;gap:10px!important;position:relative;z-index:321}.mark{width:44px!important;height:44px!important;flex:0 0 44px}.brand small{font-size:.64rem!important;letter-spacing:.075em!important;line-height:1.3!important}.menubtn{display:inline-flex!important;position:relative;z-index:322;align-items:center;justify-content:center;min-width:82px;min-height:48px;padding:10px 16px!important;font-size:1rem}
+            .nav{position:fixed!important;left:0!important;right:0!important;top:var(--mobile-nav-top,122px)!important;bottom:0!important;z-index:320!important;margin:0!important;padding:18px 24px calc(28px + env(safe-area-inset-bottom))!important;background:#171311!important;color:#fff!important;overflow-y:auto!important;opacity:0;visibility:hidden;pointer-events:none;transform:translateY(-12px);transition:opacity .2s ease,transform .2s ease,visibility .2s}.nav.open{opacity:1!important;visibility:visible!important;pointer-events:auto!important;transform:none!important}.nav ul{display:flex!important;flex-direction:column!important;align-items:stretch!important;gap:0!important;font-size:1.15rem!important}.nav li{width:100%;border-bottom:1px solid rgba(255,255,255,.18)}.nav a,.nav .admit{display:block!important;border:0!important;border-radius:0!important;padding:17px 2px!important}body.menu-open{overflow:hidden!important}
+            .hero{min-height:720px!important}.heroin{min-height:720px!important;display:grid!important;grid-template-columns:minmax(0,1fr)!important;align-content:end!important;align-items:end!important;gap:28px!important;padding:72px 0 38px!important}.heroin>div{min-width:0}.hero h1{font-size:clamp(3.45rem,14.2vw,4.6rem)!important;line-height:.9!important;letter-spacing:-.045em!important;max-width:100%!important}.hero h1 em{display:block}.heroaside{width:100%!important;max-width:100%!important}.heroaside p{font-size:1rem!important;max-width:32rem}.dancer{right:-52px!important;top:115px!important;transform:scale(.72)!important;transform-origin:top right;opacity:.24!important}.rings{width:480px!important;height:480px!important;right:-62%!important;top:18%!important}.btns{display:grid!important;grid-template-columns:minmax(0,1fr) minmax(0,1fr)!important;gap:10px!important}.btn{min-height:52px!important;padding:12px 13px!important;text-align:center}.ticker{height:42px!important}
+            .section{padding:68px 0!important}.sectionhead{grid-template-columns:1fr!important;gap:12px!important;margin-bottom:30px!important}.section h2{font-size:clamp(2.5rem,11vw,3.7rem)!important}.lead{font-size:1rem!important;margin-top:16px!important}.manifest,.programs,.content{grid-template-columns:1fr!important}.quote,.poster{min-height:420px!important;padding:28px!important}.quote p{font-size:clamp(2rem,9vw,3rem)!important}.poster strong{font-size:2rem!important}.posterart{width:70%!important}.stats{grid-template-columns:repeat(2,minmax(0,1fr))!important}.stat:nth-child(2){border-right:0!important}.stat{padding:22px 16px!important}.stat b{font-size:2.6rem!important}.cards{grid-template-columns:1fr!important}.program{min-height:430px!important;padding:26px!important}.program h3{font-size:clamp(2.6rem,11vw,3.4rem)!important}
+            .pagehero{padding:62px 0 48px!important}.pagehero h1{font-size:clamp(2.8rem,12vw,4.25rem)!important}.content{gap:30px!important}.side{position:static!important}.doc{grid-template-columns:42px minmax(0,1fr)!important}.doc>*:last-child{grid-column:2}.gallery{grid-template-columns:1fr!important}.g,.g:nth-child(n){grid-column:auto!important;min-height:230px!important}.sveden{grid-template-columns:1fr!important}
+            .quick{padding:42px 0!important}.quickin{grid-template-columns:1fr!important;gap:15px!important}.quick a{padding:13px 0!important}.foot{grid-template-columns:1fr!important;gap:22px!important}footer h2{font-size:3rem!important}.bottom{flex-direction:column!important;gap:8px!important}
+            .panel{max-height:100dvh;overflow-y:auto}.panelin{width:calc(100% - 28px)!important;padding:14px 0 24px!important}.opts{display:grid!important;grid-template-columns:1fr!important}fieldset{min-width:0}.search{padding:48px 0!important}.search h2{font-size:2.1rem!important}.cookie{left:12px!important;right:12px!important;bottom:12px!important;max-width:none!important}
+          }
+          @media(max-width:430px){.wrap{width:calc(100% - 24px)!important}.brand small{font-size:.58rem!important;letter-spacing:.055em!important}.menubtn{min-width:76px!important;padding:9px 13px!important}.hero h1{font-size:clamp(3rem,15.2vw,4rem)!important}.heroin{padding-top:56px!important}.dancer{right:-85px!important;top:145px!important;transform:scale(.62)!important}}
+          @media(max-width:360px){.btns{grid-template-columns:1fr!important}.btn{width:100%}.brand small{font-size:.54rem!important}}
+          @media(prefers-reduced-motion:reduce){.nav,.ticker div{transition:none!important;animation:none!important}}
+          </style>
+          <script id="mobile-layout-controller-v2">
+          document.addEventListener('DOMContentLoaded',function(){
+            const nav=document.getElementById('nav');
+            const button=document.getElementById('menubtn');
+            const header=document.querySelector('header');
+            if(!nav||!button||!header)return;
+            const updateTop=()=>nav.style.setProperty('--mobile-nav-top',Math.max(0,header.getBoundingClientRect().bottom)+'px');
+            const setOpen=(open)=>{
+              nav.classList.toggle('open',open);
+              document.body.classList.toggle('menu-open',open);
+              button.setAttribute('aria-controls','nav');
+              button.setAttribute('aria-expanded',String(open));
+              button.textContent=open?'Закрыть':'Меню';
+              if(open)updateTop();
+            };
+            setOpen(false);
+            button.onclick=function(event){event.preventDefault();setOpen(!nav.classList.contains('open'))};
+            nav.addEventListener('click',event=>{if(event.target.closest('a'))setOpen(false)});
+            document.addEventListener('keydown',event=>{if(event.key==='Escape')setOpen(false)});
+            window.addEventListener('resize',()=>{if(innerWidth>860)setOpen(false);else if(nav.classList.contains('open'))updateTop()});
+            window.addEventListener('scroll',()=>{if(nav.classList.contains('open'))updateTop()},{passive:true});
+          });
+          </script>
+          <!-- MOBILE-LAYOUT-V2 END -->
+          '''
+
+          if '</head>' not in source:
+              raise SystemExit('index.html has no closing head tag')
+          source = source.replace('</head>', patch + '\n</head>', 1)
+          path.write_text(source, encoding='utf-8')
+          PY
+
+      - name: Commit repaired source branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add index.html
+          if git diff --cached --quiet; then
+            echo 'Mobile layout patch already present.'
+            exit 0
+          fi
+          git commit -m 'Fix mobile navigation and responsive layout'
+          git push origin HEAD:fix/v3-multipage
