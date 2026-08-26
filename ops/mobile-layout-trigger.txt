@@ -1,0 +1,2 @@
+2026-08-26T09:25:00+08:00
+Fix mobile menu overlay, hero grid, responsive sections, safe-area and overflow issues.
