@@ -1,4 +1,8 @@
 document.addEventListener('DOMContentLoaded',function(){
+  document.querySelectorAll('body > div').forEach(function(element){
+    if(element.textContent.trim()==='V3 · MULTI-PAGE')element.remove();
+  });
+
   const nav=document.getElementById('nav');
   const button=document.getElementById('menubtn');
   const header=document.querySelector('header');
