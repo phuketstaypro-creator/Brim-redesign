@@ -1,2 +1,0 @@
-2026-08-26T18:25:00+08:00
-Import the verified V4 static export and publish it through the Git-connected Vercel project.
