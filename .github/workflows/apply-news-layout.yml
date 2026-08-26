@@ -1,0 +1,51 @@
+name: Apply editorial news redesign
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'release/news-layout/part-03.b64'
+
+permissions:
+  contents: write
+
+jobs:
+  apply-redesign:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Reconstruct verified source update
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat release/news-layout/part-*.b64 | base64 --decode > /tmp/news-layout-release.tar.gz
+          echo '5858618b7f657daeff6bf9e73c9857ae48fb998cc5f11be501266035176c58fc  /tmp/news-layout-release.tar.gz' | sha256sum --check
+          tar -xzf /tmp/news-layout-release.tar.gz -C .
+
+      - name: Validate implementation
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check assets/app.js
+          grep -Fq "03', 'Новости'" assets/app.js
+          grep -Fq 'editorial-news' assets/styles.css
+          grep -Fq 'Школа креативных индустрий' assets/app.js
+          grep -Fq 'Дополнительные программы' assets/app.js
+          if grep -Fq '05 · Новые направления' assets/app.js; then
+            echo 'Obsolete standalone projects section is still present.' >&2
+            exit 1
+          fi
+
+      - name: Commit production source
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add index.html assets/app.js assets/styles.css
+          git rm -r release/news-layout .github/workflows/apply-news-layout.yml
+          git commit -m 'Build adaptive editorial news grid and integrate extra programs'
+          git push origin HEAD:main
