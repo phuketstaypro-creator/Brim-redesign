@@ -1,0 +1,3 @@
+User-agent: *
+Disallow: /
+Sitemap: https://brim-redesign.vercel.app/sitemap.xml

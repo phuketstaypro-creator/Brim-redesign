@@ -1,0 +1,20 @@
+{
+  "name": "brhk-redesign",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22 <25"
+  },
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "build": "node build.mjs",
+    "test": "npm run build && node --test tests/build.test.mjs",
+    "test:e2e": "playwright test tests/e2e/site.spec.mjs",
+    "test:a11y": "playwright test tests/e2e/a11y.spec.mjs"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "^4.13.0",
+    "@playwright/test": "^1.62.1"
+  }
+}
