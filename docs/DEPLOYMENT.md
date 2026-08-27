@@ -1,93 +1,184 @@
 # Сборка и deployment
 
-## Целевой артефакт
+## Артефакт передачи
 
-`npm run build` запускает `build.mjs` и создаёт воспроизводимый каталог `dist/`. В него входят:
+`npm run build` создаёт самодостаточный каталог `dist/`. Production web-server отдаёт только его; Node.js, `src/`, CMS credentials и исходный JSON ему не нужны.
 
-- 36 физических публичных HTML-маршрутов;
-- отдельный `404.html`;
-- `sitemap.xml`;
-- `rss.xml` с краткими source-linked публикациями и оговоркой о неперенесённых полных материалах;
-- `search-index.json`;
-- локальные публичные файлы;
-- CSS и JavaScript с 12-символьным SHA-256 suffix в имени.
+В `dist/` входят:
 
-Для каждого route build проверяет ровно один `<h1>` и отсутствие `raw.githubusercontent.com` и пустого `<div id="app"></div>`. Это статический frontend: Vercel не должен выполнять серверный runtime или подставлять общий SPA document.
+- физический `<route>/index.html` для каждого published route;
+- `404.html`;
+- `sitemap.xml`, `rss.xml`, `search-index.json`;
+- `content-manifest.json` с adapter, route count, required routes, collection counts и media provenance/status;
+- CSS/JS с 12-символьным SHA-256 suffix;
+- content media в `/assets/media/` с 12-символьным hash содержимого;
+- стабильные first-party logo/favicon/manifest assets из `public/`.
 
-## Локальная сборка
+Общее число HTML-маршрутов динамическое: mandatory routes — только проверяемое подмножество, новости и события добавляются из `ContentBundle`. Build проверяет один `<h1>` на route, дубликаты, обязательные paths и отсутствие runtime-loader markers.
 
-Рекомендуемая версия — Node.js 24 (`.nvmrc`); `package.json` допускает `>=22 <25`.
+## Локальная production-сборка
+
+Node.js 24 рекомендуется; `package.json` допускает `>=22 <25`.
 
 ```bash
 npm ci
-npm run build
+npm run validate:content
 npm run test
+npm run test:e2e
+npm run test:a11y
+npm run test:visual
 ```
 
-Для browser-проверок:
+`npm run validate:content` проверяет выбранный ContentBundle без записи `dist/`. `npm run test` сам запускает build и contract/HTML tests. Для первого browser run:
 
 ```bash
 npx playwright install chromium
-npm run test:e2e
-npm run test:a11y
 ```
 
-`build.mjs` намеренно прекращает сборку, если отсутствует любой обязательный asset:
+Production-like build с явными настройками:
 
-```text
-assets/images/brhk-logo.png
-assets/images/studio-tutu.webp
-assets/images/studio-tutu-320.webp
-assets/images/studio-tutu-landscape.webp
-assets/images/studio-tutu-landscape-320.webp
-assets/images/studio-tutu-square.webp
-assets/images/studio-tutu-square-320.webp
-assets/icons/favicon-32.png
-assets/icons/apple-touch-icon.png
-assets/icons/icon-192.png
-assets/icons/icon-512.png
+```bash
+SITE_URL=https://example.edu ALLOW_INDEXING=true CONTENT_ADAPTER=local npm run build
 ```
 
-Этот fail-fast нельзя обходить пустыми файлами или случайными stock-изображениями. Нужны валидные локальные изображения с известными размерами и зафиксированными ограничениями provenance/rights.
+Для CMS export:
 
-## Vercel configuration
+```bash
+CONTENT_ADAPTER=json \
+CMS_CONTENT_FILE=content/export.json \
+SITE_URL=https://example.edu \
+ALLOW_INDEXING=true \
+npm run build
+```
 
-Целевые project settings:
+Не включайте `ALLOW_INDEXING=true`, пока canonical domain и право публикации контента не утверждены. Build дополнительно остановится, если хотя бы один media record имеет статус вне `owned`, `licensed` или `public-domain`. Если значение отсутствует или отличается от `true`, review-сборка разрешена, HTML получает `noindex, nofollow`, а generated `robots.txt` — `Disallow: /`. `public/robots.txt` и `public/manifest.webmanifest` копируются, но затем намеренно перезаписываются generated версиями.
+
+## Vercel
+
+`vercel.json` уже содержит:
 
 | Setting | Value |
 |---|---|
-| Root directory | repository root |
-| Production branch | `main` |
-| Node.js | 24.x |
-| Install | lockfile-based npm install |
+| Install command | `npm ci` |
 | Build command | `npm run build` |
 | Output directory | `dist` |
-| Framework | Other / no runtime framework |
+| Clean URLs | enabled |
+| Trailing slash | enabled |
+| Runtime framework | не требуется |
 
-SPA rewrite на `/index.html` запрещён: он превращает неизвестные URL в soft-404 и скрывает физические страницы. Текущий `vercel.json` уже настроен на `npm ci` → `npm run build` → `dist`, не содержит rewrite и добавляет CSP, `nosniff`, frame, referrer и permissions headers.
+Project settings:
 
-Для `/assets/*` сейчас задано `public, max-age=604800, stale-while-revalidate=86400`. Политика не объявляет нехешированные изображения неизменяемыми. Если cache policy меняется, проверяйте отдельно хешированные CSS/JS и обновляемые media/manifest/robots/sitemap.
+1. Root Directory — repository root.
+2. Production Branch — `main`.
+3. Node.js — 24.x.
+4. Framework preset — Other, если autodetect не распознал статический build.
+5. Environment variables — `CONTENT_ADAPTER`, optional `CMS_CONTENT_FILE`, `SITE_URL`, `ALLOW_INDEXING` отдельно для Preview/Production.
 
-## Git integration
+Для `CONTENT_ADAPTER=json` файл экспорта и его local media должны существовать внутри build checkout до `npm run build`. Сам Vercel adapter не обращается к CMS API. Храните JSON вне `public/`, потому что содержимое `public/` копируется в deployed `dist/` целиком. Если export формируется CI, используйте доверенный pre-build workflow и не печатайте секреты в logs.
 
-Предпочтительный процесс:
+`vercel.json` добавляет CSP (`img-src 'self'`), `nosniff`, frame, referrer и permissions headers. Cache policy разделена по типу URL:
 
-1. Подключить Vercel project именно к этому GitHub repository.
-2. Проверить production branch `main`, root directory, build command и output directory.
-3. Открыть pull request/рабочую ветку и проверить Preview deployment.
-4. После всех проверок merge/push в `main`.
-5. В Vercel убедиться, что новый deployment связан с ожидаемым commit SHA и имеет состояние `READY`.
-6. Проверить production URL после promotion.
+| URL | `Cache-Control` |
+|---|---|
+| `/assets/media/*` | `public, max-age=31536000, immutable` |
+| `/assets/site.*` | `public, max-age=31536000, immutable` |
+| `/assets/images/*` | `public, max-age=3600, must-revalidate` |
+| `/assets/icons/*` | `public, max-age=86400, stale-while-revalidate=604800` |
+| `content-manifest.json`, `search-index.json` | `public, max-age=0, must-revalidate` |
 
-Наличие GitHub push не доказывает, что Git integration активна или что production обновился. Состояние подключения и доступ к нужному Vercel team/project в репозитории не зафиксированы; их должен подтвердить владелец проекта.
+Immutable policy применяется только к content-hashed media/CSS/JS. Стабильные logo/favicon URL остаются обновляемыми.
 
-Если используется CLI fallback, сначала нужно отдельно согласовать и закрепить версию Vercel CLI, выполнить безопасный project link и получить scoped credentials через секреты CI/локальный login. `.vercel/`, токены и project credentials не коммитятся.
+SPA rewrite на `/index.html` запрещён: он создаст soft-404 и сломает требование наполненного HTML на каждом URL.
 
-## Проверка deployment
+## Передача на обычный static server
 
-Проверка проводится на финальном URL, а не только локально.
+Передавайте либо Git repository с lockfile и build instructions, либо checksum-архив уже проверенного `dist/`. Если передаётся `dist/`, принимающей стороне не нужно устанавливать npm в production.
 
-Минимальный HTTP-набор:
+Обязательная семантика сервера:
+
+- `/about/` отдаёт `/about/index.html`;
+- существующие files сохраняют правильный MIME;
+- неизвестный URL возвращает HTTP `404` с `/404.html`;
+- нет fallback всех URL на `/index.html`;
+- HTTPS включён;
+- security headers эквивалентны `vercel.json`;
+- `dist/` является document root, а repository root публично недоступен.
+
+### Nginx
+
+Минимальная конфигурация (директива `map` размещается в `http`, TLS/DNS настраиваются отдельно):
+
+```nginx
+map $uri $brhk_cache_control {
+    default "";
+    ~^/assets/media/ "public, max-age=31536000, immutable";
+    ~^/assets/site\. "public, max-age=31536000, immutable";
+    ~^/assets/images/ "public, max-age=3600, must-revalidate";
+    ~^/assets/icons/ "public, max-age=86400, stale-while-revalidate=604800";
+    ~^/(?:content-manifest|search-index)\.json$ "public, max-age=0, must-revalidate";
+}
+
+server {
+    listen 80;
+    server_name example.edu;
+    root /srv/brhk/dist;
+    index index.html;
+
+    location / {
+        try_files $uri $uri/ =404;
+    }
+
+    error_page 404 /404.html;
+    location = /404.html { internal; }
+
+    add_header Cache-Control $brhk_cache_control always;
+    add_header Content-Security-Policy "default-src 'self'; base-uri 'self'; connect-src 'self'; font-src 'self'; form-action 'self'; frame-ancestors 'self'; img-src 'self'; object-src 'none'; script-src 'self'; style-src 'self'; upgrade-insecure-requests" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header X-Frame-Options "SAMEORIGIN" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+    add_header Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=(), usb=()" always;
+}
+```
+
+Nginx location matching matters: если добавляете другие regex locations, повторно проверьте cache/security headers и `try_files`.
+
+### Apache HTTP Server
+
+DocumentRoot указывает на `dist/`. Для VirtualHost или разрешённого `.htaccess`:
+
+```apache
+DirectoryIndex index.html
+Options -MultiViews
+ErrorDocument 404 /404.html
+
+<IfModule mod_headers.c>
+  Header always set Content-Security-Policy "default-src 'self'; base-uri 'self'; connect-src 'self'; font-src 'self'; form-action 'self'; frame-ancestors 'self'; img-src 'self'; object-src 'none'; script-src 'self'; style-src 'self'; upgrade-insecure-requests"
+  Header always set X-Content-Type-Options "nosniff"
+  Header always set X-Frame-Options "SAMEORIGIN"
+  Header always set Referrer-Policy "strict-origin-when-cross-origin"
+  Header always set Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=(), usb=()"
+</IfModule>
+
+<FilesMatch "^(?:.*-[^.]+\.[0-9a-f]{12}\.(?:avif|gif|jpe?g|png|webp)|site\.[0-9a-f]{12}\.(?:css|js))$">
+  <IfModule mod_expires.c>
+    ExpiresActive On
+    ExpiresDefault "access plus 1 year"
+  </IfModule>
+  <IfModule mod_headers.c>
+    Header set Cache-Control "public, max-age=31536000, immutable"
+  </IfModule>
+</FilesMatch>
+```
+
+Не добавляйте `FallbackResource /index.html` и generic rewrite всех запросов на главную. После конфигурации проверьте, что `/definitely-not-a-route/` остаётся настоящим `404`.
+
+### Простейший static hosting
+
+Cloud object storage/CDN, GitHub Pages-подобный host или панель провайдера подходят, если поддерживают directory index и custom 404. Загрузите содержимое `dist/`, не сам каталог уровнем выше. На host без настоящего 404/headers сначала согласуйте ограничение: такой host не соответствует текущим критериям production.
+
+## Проверка реального deployment
+
+Локальная зелёная сборка не подтверждает production. Минимум:
 
 ```bash
 curl -I https://<deployment>/
@@ -96,35 +187,27 @@ curl -I https://<deployment>/news/
 curl -I https://<deployment>/sveden/
 curl -I https://<deployment>/sveden/common/
 curl -I https://<deployment>/definitely-not-a-route/
-curl https://<deployment>/news/ | grep -i raw.githubusercontent.com
+curl https://<deployment>/news/
+curl https://<deployment>/content-manifest.json
 ```
 
-Ожидается:
+Проверить:
 
-- публичные маршруты — `200` и разные наполненные HTML-документы;
-- неизвестный URL — реальный `404`;
-- CSS/JS/images — корректный MIME type, не HTML fallback;
-- HTML уже содержит title, description, canonical, breadcrumbs, основной текст и один `<h1>` без запуска JS;
-- нет сетевых запросов к raw GitHub;
-- headers фактически присутствуют в HTTP-ответах;
-- sitemap/RSS/search index соответствуют deployed build;
-- console не содержит ошибок и broken asset requests.
+- все expected routes — `200 text/html`, unknown route — `404`;
+- HTML до JS содержит unique title, description, canonical, основной текст, breadcrumbs и один `h1`;
+- URL в canonical/sitemap/RSS построены из ожидаемого `SITE_URL`;
+- `robots.txt` и meta robots соответствуют `ALLOW_INDEXING`;
+- CSS, JS, favicon, logo и каждый `src/srcset` — `200` с корректным MIME, не HTML fallback;
+- media URL имеют `/assets/media/…<hash>…` и совпадают с manifest;
+- нет `raw.githubusercontent.com`, внешнего image hotlink, console errors или broken images;
+- `content-manifest.json` counts соответствуют CMS export;
+- screenshots 390 и 1440 для home/news/education/sveden плюс menu/accessibility states;
+- редакционная сетка проверена с portrait, landscape, square и no-media карточкой.
 
-Затем выполняются screenshots как минимум для home, news, education и `/sveden/` на ширинах 390 и 1440 px, а также menu/accessibility states.
+## Git, promotion и rollback
 
-## Canonical и индексация
+GitHub push не является сам по себе доказательством deployment. После push в `main` запишите commit SHA, Vercel deployment ID и убедитесь, что именно этот deployment имеет `READY` и назначен production domain.
 
-`site.baseUrl` сейчас равен `https://brim-redesign.vercel.app` и используется генератором sitemap/RSS/canonical. Это staging URL, а не подтверждение основного домена колледжа.
+Перед promotion сохраните ID предыдущего рабочего deployment. При критической ошибке штатно promote/rollback предыдущую сборку, затем исправьте источник новым commit. Не переписывайте Git history и не возвращайте runtime loader.
 
-До запуска:
-
-1. Заказчик утверждает основной canonical host и доступ к DNS.
-2. `site.baseUrl` меняется одним commit.
-3. Проверяются canonical, sitemap, RSS, redirects и HTTPS.
-4. Только после письменного решения staging `Disallow: /` заменяется production robots policy.
-
-## Rollback
-
-Перед production promotion сохранить deployment ID и commit SHA предыдущей рабочей версии. При критической ошибке использовать штатный rollback/promote предыдущего deployment в Vercel, затем исправить источник отдельным commit. Не переписывать Git history и не восстанавливать runtime loader.
-
-Deployment считается завершённым только после фиксации commit SHA, deployment ID, времени проверки, HTTP-результатов, screenshots и известных ограничений.
+Deployment завершён только после фиксации commit SHA, deployment ID, времени, HTTP-результатов, screenshots, test reports и известных контентных/правовых ограничений.

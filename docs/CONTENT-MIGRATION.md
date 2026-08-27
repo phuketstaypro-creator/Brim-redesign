@@ -2,125 +2,185 @@
 
 ## Фактический статус
 
-Полная миграция не выполнена и не может быть честно объявлена завершённой. В рабочем дереве нет:
+Frontend и build-time integration boundary реализованы, полная миграция официального сайта — нет. В репозитории отсутствуют:
 
-- экспорта действующей CMS;
-- подтверждённого названия/версии CMS и API contract;
-- полного списка URL действующего официального сайта;
-- архива новостей и событий;
-- структурированных записей сотрудников;
-- реальных файлов документов и их метаданных;
-- заполненных обязательных сведений `/sveden/`;
-- согласованного redirect map;
-- подтверждённого основного canonical-домена;
-- полного реестра медиаправ, авторов и согласий.
+- экспорт действующей CMS и её API/schema;
+- подтверждённый полный legacy URL inventory;
+- полные тела/авторы/галереи/вложения новостей;
+- проверенные structured events и employee records;
+- настоящие файлы/реквизиты/метаданные документов;
+- заполненные обязательные сведения `/sveden/`;
+- утверждённые legal тексты и redirect map;
+- подтверждённый основной canonical domain;
+- финальные разрешения и согласия по медиаматериалам.
 
-Текущая сборка содержит 36 маршрутов: главную, 29 обычных/обязательных страниц и шесть source-linked новостных карточек с временными redesign slug. Наличие маршрута означает готовность frontend-шаблона, но не полноту или официальность содержания.
+Локальная сборка сейчас содержит обязательные frontend routes и шесть `source-linked` news routes. Точное число генерируется из данных и не является контрактом: CMS может добавлять опубликованные news/event pages, но не может удалить `REQUIRED_ROUTES`.
 
 ## Матрица текущих данных
 
-| Тип | Что есть | Чего нет | Статус |
-|---|---|---|---|
-| Site/global | Названия, навигация, контакты, блоки главной | Подтверждённый источник полей, production canonical | Требует сверки |
-| Page | 29 keyed routes и краткий prototype copy | Полные материалы и provenance | Требует экспорта |
-| Program | 4 карточки и placement | Полные характеристики, документы, даты и квалификации | Требует сверки |
-| News | 6 source-linked карточек, даты, official-site source, размеры и layout variants | Четыре точных source permalinks, body, автор, gallery, attachments, SEO | Частично сопоставлено |
-| Event | Только страница `/events/` | Structured collection | Не мигрирован |
-| Employee | Только шаблон обязательного раздела | Structured collection | Не мигрирован |
-| Document | Пять демонстрационных названий | Файлы, реквизиты, даты, размеры, доступность | Не мигрирован |
-| Gallery/media | Одно восстановленное studio-фото и его deterministic crops | Фотография сцены, полная библиотека, rights, author, source | Частично |
-| `/sveden/` | Индекс и 14 обязательных URL | Фактические поля, документы и даты актуализации | Шаблоны |
-| Legal | Маршруты и рабочий copy | Утверждённые локальные акты | Не согласовано |
+| Тип | Что есть | Что отсутствует / ограничение |
+|---|---|---|
+| Site/global | Навигация, контакты, layout и главная | Проверка всех фактов и production canonical |
+| Page | Основные pages и 14 `/sveden/*` routes | Полные утверждённые материалы/provenance |
+| Program | 2 основные + ШКИ и «Балет для всех» как дополнительные | Полные характеристики, сроки, квалификации, лицензии |
+| News | 6 source-linked карточек/routes | Body, author, gallery, attachments; у 4 нет точного permalink |
+| Event | Пустая `events` collection; готовы listing и detail renderer | Проверенные records |
+| Employee | Пустая `employees` collection; готов список на `/sveden/employees/` | Проверенные fields/records, решение по detail routes |
+| Document | Пустая structured `documents` collection; ожидаемые названия на page | Файлы, ссылки, реквизиты, даты, размеры, a11y status |
+| `/sveden/` | Required route structure и renderer для body/sections/documents | Фактические поля, документы, даты актуализации |
+| Media | Official logo; восстановленное studio image; WebP derivatives из client-provided Yandex preview | Финальные права/согласия; photographer metadata; originals в исходном качестве |
+| Legal | Маршруты и рабочие шаблоны | Утверждённые локальные акты |
 
-## Процесс миграции
+## Целевой миграционный поток
 
-### 1. Зафиксировать источники
+```text
+immutable CMS snapshot + media inventory
+                  ↓ transform
+          ContentBundle 1.0.0 JSON
+                  ↓ local files in public/
+CONTENT_ADAPTER=json + CMS_CONTENT_FILE
+                  ↓ normalize / validate / materialize
+          dist/ + content-manifest.json
+                  ↓ compare / test / preview / accept
+```
+
+Это batch/build-time migration. Текущий frontend не выполняет live CMS fetch и не должен получать CMS credentials в браузере.
+
+## 1. Зафиксировать исходники
 
 Получить от заказчика:
 
-- полный экспорт CMS и описание content types;
-- список действующих доменов и поддоменов;
-- XML sitemap, server route export или иной полный URL inventory;
-- папку документов с оригинальными именами и метаданными;
-- медиареестр с автором, источником, правом публикации и согласиями;
-- контакты редактора, CMS-специалиста, юриста и ответственного за `/sveden/`.
+- immutable CMS export с timestamp/checksum;
+- описание content types, fields и workflow statuses;
+- полный sitemap/server route export;
+- originals документов с исходными именами;
+- media inventory: original, source URL, author/credit, license/permission, consent status, alt/caption/crops;
+- ответственных за редакционную, фактическую, юридическую и `/sveden/` проверку.
 
-Экспорт сохраняется как исходный read-only snapshot с датой получения и checksum. Секреты и персональные данные не коммитятся.
+Raw snapshot хранить read-only в защищённом migration storage. CMS tokens, персональные данные и приватные drafts не коммитить.
 
-### 2. Провести URL inventory
+## 2. Провести URL inventory
 
-Для каждого обнаруженного legacy URL записать:
+Для каждого legacy URL записать:
 
 - HTTP status и canonical;
-- тип материала;
-- title и дату;
-- связи с документами/медиа;
-- целевой новый URL;
-- решение: сохранить, 301, архивировать или удалить после письменного согласования.
+- CMS ID/content type;
+- title/date/language;
+- связанные media/documents;
+- новый route;
+- решение: preserve, 301, archive или remove после письменного согласования.
 
-Текущий `ROUTE-MAP.csv` перечисляет только маршруты новой prototype-сборки. Он не является legacy inventory и не подтверждает отсутствие других URL.
+`docs/ROUTE-MAP.csv` описывает текущий frontend, но не доказывает полноту legacy inventory. Slug шести локальных redesign news pages временный и не подтверждает legacy URL.
 
-### 3. Нормализовать данные
+## 3. Сформировать `ContentBundle`
 
-Преобразовать CMS export в контракты `CONTENT-SCHEMA.md`. При трансформации:
+Создать полный JSON по [схеме](CONTENT-SCHEMA.md). При mapping:
 
-- не заполнять пробелы выдуманными ФИО, датами, результатами или документами;
-- сохранять исходный ID и source URL для трассировки;
-- нормализовать slug и даты детерминированно;
-- отмечать отсутствующее как `null`;
-- отделять draft/source-linked от approved/published;
-- не превращать название документа в рабочую ссылку без файла;
-- сохранять ШКИ и «Балет для всех» в образовательной архитектуре;
-- сохранять все обязательные `/sveden/` URL.
+- не заполнять пропуски вымышленными ФИО, должностями, датами, результатами или документами;
+- сохранять source CMS ID/URL в миграционном журнале;
+- передавать explicit workflow status;
+- нормализовать routes и ISO dates детерминированно;
+- сохранять `null` для неизвестного optional value;
+- преобразовывать rich text только в разрешённые blocks;
+- оставлять ШКИ и «Балет для всех» внутри `programs` с `primary: false`;
+- сохранять все routes из `src/content/required-routes.mjs`;
+- не добавлять блок «Новые проекты».
 
-### 4. Перенести медиа
+Normalizer фильтрует drafts, а validator агрегирует ошибки duplicate IDs/routes, unsafe paths, dates, missing required routes и unknown media IDs. Ошибку validation нельзя обходить ослаблением required routes ради импорта.
 
-Для каждого файла зафиксировать оригинальное имя, hash, автора, источник, право публикации, людей в кадре, alt и редакционное кадрирование. Не удалять водяные знаки и не hotlink внешние галереи.
+## 4. Перенести медиа
 
-Генерировать responsive variants можно только после сохранения оригинала и provenance. Технически декодируемый файл не равен юридически разрешённому.
+Внешний ingestion step должен:
 
-### 5. Перенести документы
+1. скачать разрешённый original/variant в доверенной среде;
+2. проверить MIME, декодирование, размеры и checksum;
+3. сохранить provenance и original filename;
+4. получить rights status и необходимые consent records;
+5. подготовить responsive renditions без удаления watermark;
+6. положить файлы внутрь `public/`;
+7. добавить `MediaAsset` и ссылаться на него по stable ID.
 
-Для каждого документа проверить:
+`materializeMedia` не скачивает URL: на build он читает local `sourcePath` и выпускает content-hashed first-party `/assets/media/*`. `source` хранит provenance и не становится runtime hotlink.
 
-- читаемость и целостность файла;
-- официальное название, реквизиты и актуальность;
-- MIME type, размер и публичный URL;
-- наличие доступного текстового слоя;
-- необходимость доступной HTML-альтернативы;
-- размещение в обычном разделе и/или `/sveden/`;
-- отсутствие скрытых персональных данных в metadata.
+### Уже импортированные Yandex-фотографии
 
-Недоступный скан нельзя автоматически считать соответствующим требованиям доступности сайта.
+Источник: предоставленная заказчиком публичная папка `https://disk.yandex.ru/d/0grsoeDxm9nDbQ`. В репозитории находятся только WebP derivatives из доступных preview JPEG с номерами `001`, `014`, `015`, `034`, `039`, `043`, `052`; оригинальные JPEG в исходном качестве не сохранены как публикационные originals.
 
-### 6. Собрать и сравнить
+Для этих records установлен точный машинный статус:
 
-После каждой партии данных выполнить:
-
-```bash
-npm run build
-npm run test
-npm run test:e2e
-npm run test:a11y
+```text
+client-provided-pending-final-rights-check
 ```
 
-Дополнительно сравнить количество записей по типам, first/last publication dates, список файлов и URL между экспортом, нормализованными данными и `dist/`.
+Подпись `Архив БРХК` — описание предоставленного архива, а не имя фотографа и не доказательство лицензии. Источник не сообщил фотографа, поэтому автор не придуман. До production нужны:
 
-### 7. Приёмка и redirects
+- письменное подтверждение основания публикации;
+- имя/форма credit, если требуется правообладателем;
+- согласия изображённых лиц и законных представителей, где применимо;
+- подтверждение допустимых crops и срока использования;
+- по возможности originals вместо preview derivatives.
 
-Redirect map утверждается отдельно владельцем сайта. До этого нельзя удалять или перенаправлять старые URL на основании догадки. После deploy выборочно проверить старые ссылки, обязательные страницы, документы, canonical, sitemap и реальные HTTP statuses.
+Подробный статус — в [ASSET-LICENSES.md](ASSET-LICENSES.md).
 
-## Критерии завершения миграции
+### Восстановленное studio image
 
-Миграция может считаться завершённой только после того, как:
+`studio-tutu.webp` технически восстановлен из исторического repository payload, а его responsive crops детерминированы. Это не подтверждает upstream author/license/consent. Он имеет тот же pending-final-rights-check status и должен пройти отдельную проверку. Повреждённый `stage.b64` достоверно не восстанавливается и не публикуется.
 
-- полученный CMS snapshot полностью инвентаризирован;
-- каждая запись имеет source и результат миграции;
-- все legacy URL получили утверждённое решение;
-- документы и медиа имеют metadata и ответственного;
-- source-linked summaries сопоставлены с точными CMS records, перенесены полностью или получили письменное редакционное решение;
-- фактический контент проверен колледжем;
-- юридические тексты проверены уполномоченным лицом;
-- сборка, ссылки, HTTP, screenshots и accessibility проверки выполнены на реальном deployment.
+## 5. Перенести документы
 
-До выполнения этих условий frontend можно передать как интеграционно готовый шаблон, но не как завершённую миграцию официального сайта.
+Для каждого файла зафиксировать:
+
+- official title и реквизиты;
+- original filename, MIME и byte size;
+- publication/update date и актуальность;
+- public route и размещение в `/documents/`/`/sveden/`;
+- checksum и source;
+- text layer, tags, reading order, language и need for HTML alternative;
+- владельца проверки и персональные данные в metadata.
+
+Прошедший publication normalization record со статусом `published` или `live` и настоящим `href` становится активной ссылкой текущего renderer. Название без файла не превращать в фиктивный PDF URL.
+
+## 6. Проверять партиями
+
+Для каждой партии:
+
+```bash
+CONTENT_ADAPTER=json CMS_CONTENT_FILE=content/export.json npm run test
+npm run test:e2e
+npm run test:a11y
+npm run test:visual
+```
+
+Сверить CMS snapshot → JSON → `dist/content-manifest.json`:
+
+- counts всех collections;
+- список routes и required subset;
+- first/last publication dates;
+- dropped drafts и причину каждого исключения;
+- media ID/provenance/originalName/rightsStatus; точный source сверяется по внешнему migration register, потому что публичный manifest его не раскрывает;
+- files/checksums и отсутствие внешних image URLs;
+- exact sample records, включая rich text, documents и no-media cards.
+
+Visual regression дополнить content stress cases: 1, 2, 3, 6 и 20 news cards; portrait/landscape/square; очень длинный title; отсутствующий optional cover.
+
+## 7. Preview, redirects и приёмка
+
+На Preview проверить HTTP, HTML без JS, screenshots, keyboard/screen reader, links/assets, headers, noindex и CMS sample diff. Redirects применять только после утверждённого map; неизвестный URL должен оставаться настоящим `404`.
+
+Production promotion выполняется после выбора canonical domain, правовой проверки media/documents/legal pages и письменной content acceptance. На реальном deployment повторить HTTP, browser, a11y и visual проверки.
+
+## Критерии завершения
+
+Миграция завершена только когда:
+
+- CMS snapshot полностью инвентаризирован;
+- каждая source record имеет migration outcome;
+- required и legacy routes получили утверждённое решение;
+- news/event/employee/document/sveden content проверен владельцем;
+- media имеют provenance, rights и consent status;
+- documents имеют metadata и accessibility outcome;
+- legal тексты утверждены;
+- production canonical/robots согласованы;
+- deployed commit/deployment ID, HTTP results, screenshots и test reports зафиксированы.
+
+До этого репозиторий можно передать как CMS-независимый интеграционно готовый frontend, но не как завершённую миграцию официального сайта.
