@@ -6,7 +6,8 @@ export const programs = [
     type: 'Основная программа',
     title: 'Искусство балета',
     description: 'Классический танец, актёрское мастерство, музыкальная подготовка и сценическая практика.',
-    image: 'stage',
+    image: 'initiation034Portrait',
+    imageAlt: 'Участник исполняет прыжок на сцене БРХК',
     primary: true
   },
   {
@@ -16,7 +17,8 @@ export const programs = [
     type: 'Основная программа',
     title: 'Искусство танца',
     description: 'Народно-сценический танец, культура региона и современная исполнительская практика.',
-    image: 'studio',
+    image: 'initiation043Landscape',
+    imageAlt: 'Участница исполняет классический балетный номер на сцене БРХК',
     primary: true
   },
   {
@@ -26,7 +28,8 @@ export const programs = [
     type: 'Цифровое творчество',
     title: 'Школа креативных индустрий',
     description: 'Звук, видео, анимация, дизайн, электронная музыка и проектная работа.',
-    image: 'studio',
+    image: 'studioPortrait',
+    imageAlt: 'Балетный костюм и экран с занятием в учебном зале БРХК',
     primary: false
   },
   {
@@ -36,7 +39,8 @@ export const programs = [
     type: 'Открытые группы',
     title: 'Балет для всех',
     description: 'Культура движения для детей, подростков и взрослых с разным уровнем подготовки.',
-    image: 'stage',
+    image: 'initiation014Portrait',
+    imageAlt: 'Участница сценического номера на посвящении в профессию БРХК',
     primary: false
   }
 ];
