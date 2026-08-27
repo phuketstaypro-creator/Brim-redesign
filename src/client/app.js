@@ -45,7 +45,7 @@ function applySettings() {
   }
 }
 
-function setMenu(open) {
+function setMenu(open, { restoreFocus = false } = {}) {
   if (!nav || !menu || !header) return;
   nav.classList.toggle('open', open);
   body.classList.toggle('menu-open', open);
@@ -53,7 +53,11 @@ function setMenu(open) {
   menu.textContent = open ? 'Закрыть' : 'Меню';
   if (open) {
     nav.style.setProperty('--nav-top', `${Math.max(0, header.getBoundingClientRect().bottom)}px`);
-    nav.querySelector('a')?.focus();
+    requestAnimationFrame(() => {
+      if (nav.classList.contains('open')) nav.querySelector('a')?.focus();
+    });
+  } else if (restoreFocus) {
+    menu.focus();
   }
 }
 
@@ -172,7 +176,7 @@ document.addEventListener('keydown', (event) => {
   trapDialogFocus(event);
   if (event.key !== 'Escape') return;
   if (activeDialog) closeDialog(activeDialog);
-  else setMenu(false);
+  else setMenu(false, { restoreFocus: true });
 });
 
 searchInput?.addEventListener('input', async (event) => {

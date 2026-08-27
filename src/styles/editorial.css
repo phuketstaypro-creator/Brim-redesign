@@ -11,8 +11,11 @@
 .editorial-news.editorial-news {
   --editorial-gap: 18px;
   --editorial-surface: #e9e7e3;
+  --editorial-placeholder: #d9d1ca;
+  --editorial-placeholder-ink: #851c24;
   display: grid;
   width: 100%;
+  max-width: 100%;
   min-width: 0;
   grid-template-columns: repeat(12, minmax(0, 1fr));
   grid-auto-flow: dense;
@@ -60,27 +63,107 @@
   width: 100%;
   height: 100%;
   min-width: 0;
-  grid-template-rows: minmax(0, 1fr) auto;
+  min-height: 0;
+  grid-template-rows: minmax(0, 55%) minmax(0, 45%);
   overflow: hidden;
   color: inherit;
   text-decoration: none;
 }
 
+/*
+ * Fixed proportions keep long headings from consuming the media track. This
+ * is deliberately expressed per image shape: the source ratio still controls
+ * the composition, while every photograph retains a useful visual area.
+ */
+.editorial-news.editorial-news > .editorial-card.is-landscape > a {
+  grid-template-rows: minmax(0, 54%) minmax(0, 46%);
+}
+
+.editorial-news.editorial-news > .editorial-card.is-square > a {
+  grid-template-rows: minmax(0, 56%) minmax(0, 44%);
+}
+
+.editorial-news.editorial-news > .editorial-card.is-portrait > a,
+.editorial-news.editorial-news > .editorial-card.is-featured > a {
+  grid-template-rows: minmax(0, 65%) minmax(0, 35%);
+}
+
+.editorial-news.editorial-news > .editorial-card.is-wide:not(.is-featured) > a {
+  grid-template-rows: minmax(0, 57%) minmax(0, 43%);
+}
+
 .editorial-news .editorial-media {
+  position: relative;
+  isolation: isolate;
   width: 100%;
   min-width: 0;
   min-height: 0;
   margin: 0;
   overflow: hidden;
-  background: #171211;
+  background-color: var(--editorial-placeholder);
+  background-image:
+    linear-gradient(145deg, transparent 0 49.5%, rgba(133, 28, 36, .15) 50% 51.5%, transparent 52%),
+    radial-gradient(circle at 78% 22%, rgba(255, 255, 255, .7) 0 9%, transparent 9.5%),
+    linear-gradient(120deg, #d4cbc3, #eeeae5 58%, #c8bdb4);
+}
+
+.editorial-news .editorial-media::before {
+  position: absolute;
+  z-index: 0;
+  inset: clamp(10px, 3vw, 24px);
+  border: 1px solid rgba(133, 28, 36, .22);
+  content: "";
+  pointer-events: none;
 }
 
 .editorial-news .editorial-media img {
+  position: relative;
+  z-index: 1;
   display: block;
   width: 100%;
   height: 100%;
   max-width: none;
   object-fit: cover;
+}
+
+.editorial-news .editorial-media picture {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.editorial-news .editorial-credit {
+  position: absolute;
+  z-index: 2;
+  right: 8px;
+  bottom: 8px;
+  left: 8px;
+  width: max-content;
+  max-width: calc(100% - 16px);
+  margin: 0;
+  padding: 5px 7px;
+  overflow: hidden;
+  color: #fff;
+  background: rgba(18, 12, 13, .72);
+  font: 600 .58rem/1.2 var(--sans, Arial, Helvetica, sans-serif);
+  letter-spacing: .04em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Supports an adapter-provided empty media state without showing a broken box. */
+.editorial-news .editorial-media:empty::after,
+.editorial-news .editorial-media:not(:has(img))::after,
+.editorial-news .editorial-media[data-state="empty"]::after,
+.editorial-news .editorial-card.is-no-media .editorial-media::after {
+  position: absolute;
+  z-index: 1;
+  right: clamp(12px, 3vw, 26px);
+  bottom: clamp(11px, 3vw, 24px);
+  color: var(--editorial-placeholder-ink);
+  content: "БРХК";
+  font: 700 clamp(.62rem, 1vw, .78rem)/1 var(--sans, Arial, Helvetica, sans-serif);
+  letter-spacing: .16em;
 }
 
 .editorial-news .editorial-card.is-portrait .editorial-media img {
@@ -94,6 +177,8 @@
 
 .editorial-news .editorial-copy {
   min-width: 0;
+  min-height: 0;
+  overflow: hidden;
   background: var(--editorial-surface);
 }
 
@@ -109,11 +194,37 @@
   display: -webkit-box;
   overflow: hidden;
   -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.editorial-news .editorial-copy h3 {
+  display: -webkit-box;
+  overflow: hidden;
+  font-size: clamp(1.4rem, 2vw, 2rem);
+  -webkit-box-orient: vertical;
   -webkit-line-clamp: 3;
+}
+
+.editorial-news .editorial-card.is-portrait .editorial-copy h3,
+.editorial-news .editorial-card.is-featured .editorial-copy h3 {
+  font-size: clamp(1.65rem, 2.4vw, 2.35rem);
+  -webkit-line-clamp: 4;
 }
 
 html[data-theme="contrast"] .editorial-news.editorial-news {
   --editorial-surface: #000;
+  --editorial-placeholder: #000;
+  --editorial-placeholder-ink: #fff;
+}
+
+html[data-theme="contrast"] .editorial-news .editorial-media {
+  background-image:
+    linear-gradient(145deg, transparent 0 49.5%, rgba(255, 255, 255, .38) 50% 51%, transparent 51.5%),
+    linear-gradient(120deg, #000, #292929);
+}
+
+html[data-theme="contrast"] .editorial-news .editorial-media::before {
+  border-color: rgba(255, 255, 255, .65);
 }
 
 /* The archive is intentionally a calmer two-column version of the same system. */
@@ -217,23 +328,23 @@ html[data-theme="contrast"] .editorial-news.editorial-news {
   }
 
   .editorial-news.editorial-news > .editorial-card > a {
-    grid-template-rows: 48% minmax(0, 52%);
+    grid-template-rows: minmax(0, 49%) minmax(0, 51%);
   }
 
   .editorial-news.editorial-news > .editorial-card.is-landscape > a {
-    grid-template-rows: 42% minmax(0, 58%);
+    grid-template-rows: minmax(0, 42%) minmax(0, 58%);
   }
 
   .editorial-news.editorial-news > .editorial-card.is-portrait > a {
-    grid-template-rows: 58% minmax(0, 42%);
+    grid-template-rows: minmax(0, 60%) minmax(0, 40%);
   }
 
   .editorial-news.editorial-news > .editorial-card.is-wide > a {
-    grid-template-rows: 57% minmax(0, 43%);
+    grid-template-rows: minmax(0, 55%) minmax(0, 45%);
   }
 
   .editorial-news.editorial-news > .editorial-card.is-featured > a {
-    grid-template-rows: 62% minmax(0, 38%);
+    grid-template-rows: minmax(0, 62%) minmax(0, 38%);
   }
 
   .editorial-news.editorial-news .editorial-copy,
@@ -304,23 +415,30 @@ html[data-theme="contrast"] .editorial-news.editorial-news {
   }
 }
 
-/* Extremely narrow embedded views need one readable column; normal phones do not. */
+/* Keep the magazine rhythm at 320px too; tighten rather than stack the cards. */
 @media (max-width: 339px) {
   .editorial-news.editorial-news {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr);
-    grid-auto-rows: auto;
+    --editorial-gap: 7px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-auto-rows: 8px;
   }
 
-  .editorial-news.editorial-news > .editorial-card,
-  .editorial-news.editorial-news > .editorial-card.is-portrait,
-  .editorial-news.editorial-news > .editorial-card.is-landscape,
-  .editorial-news.editorial-news > .editorial-card.is-square,
-  .editorial-news.editorial-news > .editorial-card.is-wide,
-  .editorial-news.editorial-news > .editorial-card.is-featured {
-    grid-column: 1;
-    grid-row: auto;
-    min-height: 330px;
+  .editorial-news.editorial-news .editorial-copy,
+  .editorial-news.editorial-news .editorial-card.is-portrait .editorial-copy {
+    padding: 10px 9px 27px;
+  }
+
+  .editorial-news.editorial-news .editorial-copy h3,
+  .editorial-news.editorial-news .editorial-card.is-portrait .editorial-copy h3,
+  .editorial-news.editorial-news > .editorial-card.is-wide .editorial-copy h3,
+  .editorial-news.editorial-news > .editorial-card.is-featured .editorial-copy h3 {
+    margin-top: 7px;
+    font-size: .94rem;
+  }
+
+  .editorial-news.editorial-news .editorial-meta {
+    font-size: .48rem;
+    letter-spacing: .035em;
   }
 }
 
