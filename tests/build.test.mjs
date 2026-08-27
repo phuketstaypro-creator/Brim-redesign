@@ -1,14 +1,17 @@
 import assert from 'node:assert/strict';
-import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import { existsSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import test from 'node:test';
-import { newsItems } from '../src/data/news.mjs';
-import { pages } from '../src/data/pages.mjs';
-import { svedenSections } from '../src/data/sveden.mjs';
+import { loadContent } from '../src/content/load-content.mjs';
+import { REQUIRED_ROUTES } from '../src/content/required-routes.mjs';
+import { collectPublicRoutes } from '../src/content/validate.mjs';
 
 const projectRoot = resolve(import.meta.dirname, '..');
 const distRoot = join(projectRoot, 'dist');
-const publicRoutes = ['/', ...Object.keys(pages), ...newsItems.map((item) => item.href)];
+const content = await loadContent({ env: { CONTENT_ADAPTER: 'local' }, cwd: projectRoot });
+const publicRoutes = collectPublicRoutes(content);
+const { svedenSections } = content;
 const forbiddenLoaderMarkers = [
   'raw.githubusercontent.com',
   '<div id="app"></div>',
@@ -60,13 +63,12 @@ function builtTarget(url) {
   return join(direct, 'index.html');
 }
 
-test('build emits exactly 36 unique filled public routes', () => {
-  assert.equal(publicRoutes.length, 36);
-  assert.equal(new Set(publicRoutes).size, 36);
+test('build emits every unique filled route supplied by the content adapter', () => {
+  assert.equal(new Set(publicRoutes).size, publicRoutes.length);
   assert.ok(existsSync(distRoot), 'dist/ is missing; run npm run build first');
 
   const generatedRouteFiles = htmlFiles(distRoot).filter((file) => !file.endsWith('404.html'));
-  assert.equal(generatedRouteFiles.length, 36, 'unexpected number of generated route documents');
+  assert.equal(generatedRouteFiles.length, publicRoutes.length, 'unexpected number of generated route documents');
 
   const titles = new Set();
   for (const route of publicRoutes) {
@@ -90,6 +92,8 @@ test('build emits exactly 36 unique filled public routes', () => {
       assert.ok(!html.includes(marker), `${route}: forbidden runtime-loader marker: ${marker}`);
     }
   }
+
+  for (const route of REQUIRED_ROUTES) assert.ok(publicRoutes.includes(route), `${route}: required route absent`);
 });
 
 test('404 is a filled standalone noindex document', () => {
@@ -170,11 +174,26 @@ test('official logo, favicon and hashed first-party assets are emitted', () => {
 test('sitemap contains every public route once', () => {
   const sitemap = readFileSync(join(distRoot, 'sitemap.xml'), 'utf8');
   const locations = [...sitemap.matchAll(/<loc>([^<]+)<\/loc>/g)].map((match) => match[1]);
-  assert.equal(locations.length, 36);
-  assert.equal(new Set(locations).size, 36);
+  assert.equal(locations.length, publicRoutes.length);
+  assert.equal(new Set(locations).size, publicRoutes.length);
   for (const route of publicRoutes) {
     assert.ok(locations.some((location) => new URL(location).pathname === route), `${route}: absent from sitemap`);
   }
+});
+
+test('content media is fingerprinted and the public manifest exposes safe provenance metadata', () => {
+  const manifest = JSON.parse(readFileSync(join(distRoot, 'content-manifest.json'), 'utf8'));
+  assert.equal(manifest.routeCount, publicRoutes.length);
+  assert.equal(manifest.collections.news, content.newsItems.length);
+  assert.equal(manifest.collections.media, content.media.length);
+  assert.ok(manifest.media.every((asset) => /^\/assets\/media\/[a-z0-9-]+\.[a-f0-9]{12}\.(?:avif|gif|jpe?g|png|webp)$/.test(asset.src)));
+  assert.ok(manifest.media.every((asset) => ['repository', 'external'].includes(asset.provenance) && asset.originalName && asset.rightsStatus));
+  assert.ok(manifest.media.every((asset) => !Object.hasOwn(asset, 'source')));
+
+  const news = readRoute('/news/');
+  assert.match(news, /data-media-id="initiation014Portrait"/);
+  assert.match(news, /class="editorial-card is-square is-no-media"/);
+  assert.ok(!news.includes('/assets/images/studio-tutu'));
 });
 
 test('every internal link, image and generated asset resolves in dist', () => {
@@ -195,4 +214,124 @@ test('every internal link, image and generated asset resolves in dist', () => {
     }
   }
   assert.deepEqual(failures, [], `broken internal references:\n${failures.join('\n')}`);
+});
+
+test('json adapter drives the complete build and renders CMS collections into server HTML', { concurrency: false }, () => {
+  const fixtureFile = join(projectRoot, `.tmp-content-adapter-json-${process.pid}.json`);
+  const event = {
+    id: 'json-build-event',
+    slug: 'json-build-event',
+    href: '/events/json-build-event/',
+    title: 'JSON CMS: открытый показ',
+    description: 'Интеграционная запись афиши из JSON-экспорта.',
+    category: 'Показ',
+    publishedAt: '2026-08-27',
+    startsAt: '2026-09-01T18:00:00+08:00',
+    date: '1 сентября 2026',
+    status: 'published',
+    body: [
+      { type: 'heading', level: 2, text: 'Программа из CMS' },
+      { type: 'paragraph', text: 'Эта фраза должна попасть в готовый HTML без клиентского рендера.' }
+    ]
+  };
+  const employee = {
+    id: 'json-build-employee',
+    name: 'Тестовый сотрудник JSON CMS',
+    position: 'Интеграционная должность',
+    department: 'Проверка передачи данных',
+    status: 'published'
+  };
+  const document = {
+    id: 'json-build-document',
+    title: 'Тестовый документ JSON CMS',
+    href: 'https://cms.invalid/documents/integration-order.pdf',
+    fileType: 'PDF',
+    updatedAt: '2026-08-27',
+    status: 'live'
+  };
+  const jsonContent = structuredClone(content);
+  jsonContent.newsItems[0].gallery = [{
+    image: 'initiation043Landscape',
+    alt: 'Интеграционная фотография из media registry',
+    caption: 'Галерея из JSON CMS'
+  }];
+  jsonContent.events = [...jsonContent.events, event];
+  jsonContent.employees = [...jsonContent.employees, employee];
+  jsonContent.documents = [...jsonContent.documents, document];
+  jsonContent.svedenSections = jsonContent.svedenSections.map((section) => section.href === '/sveden/common/'
+    ? {
+        ...section,
+        status: 'published',
+        body: [
+          { type: 'heading', level: 2, text: 'Сведения из JSON CMS' },
+          { type: 'paragraph', text: 'Проверенное содержимое обязательного раздела отдано серверным HTML.' },
+          { type: 'list', items: ['Значение из CMS', 'Дата актуализации из CMS'] }
+        ]
+      }
+    : section);
+
+  const runBuild = (env) => spawnSync(process.execPath, ['build.mjs'], {
+    cwd: projectRoot,
+    env,
+    encoding: 'utf8',
+    maxBuffer: 10 * 1024 * 1024
+  });
+  const buildFailure = (result) => [result.stdout, result.stderr].filter(Boolean).join('\n');
+
+  try {
+    writeFileSync(fixtureFile, `${JSON.stringify(jsonContent, null, 2)}\n`, 'utf8');
+    const result = runBuild({
+      ...process.env,
+      CONTENT_ADAPTER: 'json',
+      CMS_CONTENT_FILE: fixtureFile,
+      SITE_URL: 'https://json-build.invalid',
+      ALLOW_INDEXING: 'false'
+    });
+    assert.equal(result.status, 0, `JSON adapter build failed:\n${buildFailure(result)}`);
+
+    const eventDetail = readRoute(event.href);
+    assert.match(eventDetail, /data-cms-item="event"/);
+    assert.match(eventDetail, /JSON CMS: открытый показ/);
+    assert.match(eventDetail, /Программа из CMS/);
+    assert.match(eventDetail, /Эта фраза должна попасть в готовый HTML без клиентского рендера\./);
+
+    const newsDetail = readRoute(jsonContent.newsItems[0].href);
+    assert.match(newsDetail, /data-cms-field="gallery"/);
+    assert.match(newsDetail, /Галерея из JSON CMS/);
+    assert.match(newsDetail, /data-media-id="initiation043Landscape"/);
+
+    const eventsListing = readRoute('/events/');
+    assert.match(eventsListing, /data-cms-collection="events"/);
+    assert.ok(eventsListing.includes(`href="${event.href}"`));
+    assert.match(eventsListing, /JSON CMS: открытый показ/);
+
+    const employeesPage = readRoute('/sveden/employees/');
+    assert.match(employeesPage, /data-cms-collection="employees"/);
+    assert.match(employeesPage, /Тестовый сотрудник JSON CMS/);
+    assert.match(employeesPage, /Интеграционная должность/);
+
+    const documentsPage = readRoute('/documents/');
+    assert.match(documentsPage, /Тестовый документ JSON CMS/);
+    assert.ok(documentsPage.includes(`href="${document.href}"`));
+    assert.match(documentsPage, /Обновлено: 2026-08-27/);
+
+    const svedenPage = readRoute('/sveden/common/');
+    assert.match(svedenPage, /Сведения из JSON CMS/);
+    assert.match(svedenPage, /Проверенное содержимое обязательного раздела отдано серверным HTML\./);
+    assert.match(svedenPage, /<li>Значение из CMS<\/li>/);
+
+    const manifest = JSON.parse(readFileSync(join(distRoot, 'content-manifest.json'), 'utf8'));
+    assert.equal(manifest.adapter, 'json');
+    assert.equal(manifest.collections.events, jsonContent.events.length);
+    assert.equal(manifest.collections.employees, jsonContent.employees.length);
+    assert.equal(manifest.collections.documents, jsonContent.documents.length);
+    assert.equal(manifest.routeCount, publicRoutes.length + 1);
+    assert.match(readFileSync(join(distRoot, 'sitemap.xml'), 'utf8'), /\/events\/json-build-event\//);
+  } finally {
+    rmSync(fixtureFile, { force: true });
+    const localEnv = { ...process.env, CONTENT_ADAPTER: 'local', ALLOW_INDEXING: 'false' };
+    delete localEnv.CMS_CONTENT_FILE;
+    const restored = runBuild(localEnv);
+    assert.equal(restored.status, 0, `Failed to restore the local build after JSON adapter test:\n${buildFailure(restored)}`);
+  }
 });
