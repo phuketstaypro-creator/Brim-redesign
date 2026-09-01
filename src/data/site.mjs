@@ -1,3 +1,27 @@
+import { svedenSections } from './sveden.mjs';
+
+export const institutionalNavigation = [
+  { href: '/about/independent-quality-assessment/', label: 'Независимая оценка качества условий' },
+  { href: '/students/psychological-service/', label: 'Психологическая служба' },
+  { href: '/safety/', label: 'Безопасность учреждения и информационная безопасность' },
+  { href: '/documents/sout/', label: 'Специальная оценка условий труда (СОУТ)' },
+  { href: '/anti-corruption/', label: 'Противодействие коррупции' },
+  { href: '/about/research/', label: 'Научно-исследовательская деятельность' },
+  { href: '/education/professional-standards/', label: 'Профессиональные стандарты' },
+  { href: '/students/employment/', label: 'Содействие трудоустройству выпускников' },
+  { href: '/about/recreation-base/', label: 'База отдыха' },
+  { href: '/students/educational-work/', label: 'Воспитательная работа' },
+  { href: '/faq/', label: 'Часто задаваемые вопросы' }
+];
+
+const mandatoryDisclosureLinks = svedenSections
+  .filter((section) => section.group === 'mandatory')
+  .map((section) => ({ href: section.href, label: section.title, group: 'Обязательные подразделы' }));
+
+const legacyDisclosureLinks = svedenSections
+  .filter((section) => section.group === 'legacy')
+  .map((section) => ({ href: section.href, label: section.title, group: 'Сохранённые адреса' }));
+
 export const site = {
   locale: 'ru',
   baseUrl: 'https://brim-redesign.vercel.app',
@@ -29,15 +53,93 @@ export const site = {
     }
   },
   navigation: [
-    { href: '/about/', label: 'Колледж' },
-    { href: '/education/', label: 'Образование' },
-    { href: '/admission/', label: 'Абитуриентам' },
-    { href: '/students/', label: 'Студентам' },
-    { href: '/news/', label: 'Новости' },
-    { href: '/sveden/', label: 'Сведения' },
+    {
+      label: 'Колледж',
+      children: [
+        { href: '/about/', label: 'О колледже' },
+        { href: '/about/history/', label: 'История' },
+        { href: '/about/alumni/', label: 'Выпускники' },
+        { href: '/about/pride/', label: 'Гордость колледжа' },
+        { href: '/about/independent-quality-assessment/', label: 'Независимая оценка качества' },
+        { href: '/about/research/', label: 'Научно-исследовательская деятельность' },
+        { href: '/about/recreation-base/', label: 'База отдыха' },
+        { href: '/contacts/', label: 'Контакты' }
+      ]
+    },
+    {
+      label: 'Образование',
+      children: [
+        { href: '/education/', label: 'Образовательные программы', group: 'Программы' },
+        { href: '/creative-industries/', label: 'Школа креативных индустрий', group: 'Программы' },
+        { href: '/ballet-for-all/', label: 'Балет для всех', group: 'Программы' },
+        { href: '/additional-education/children/', label: 'Дополнительное образование для детей', group: 'Дополнительное образование' },
+        { href: '/additional-education/adults/', label: 'Дополнительное образование для взрослых', group: 'Дополнительное образование' },
+        { href: '/education/professional-standards/', label: 'Профессиональные стандарты', group: 'Нормативные материалы' }
+      ]
+    },
+    {
+      label: 'Поступление',
+      children: [
+        { href: '/admission/', label: 'Абитуриентам' },
+        { href: '/admission/rules/', label: 'Правила приёма' },
+        { href: '/admission/commission-hours/', label: 'График работы приёмной комиссии' },
+        { href: '/admission/results/', label: 'Результаты вступительных испытаний' },
+        { href: '/admission/information/', label: 'Дополнительная информация' },
+        { href: '/sveden/vacant/', label: 'Вакантные места для приёма (перевода)' }
+      ]
+    },
+    {
+      label: 'Студентам',
+      children: [
+        { href: '/students/', label: 'Обучающимся', group: 'Учёба' },
+        { href: '/students/e-journal/', label: 'Электронный журнал и дневник', group: 'Учёба' },
+        { href: '/students/schedule/', label: 'Расписание', group: 'Учёба' },
+        { href: '/students/vpr/', label: 'ВПР', group: 'Аттестация и олимпиады' },
+        { href: '/students/vsosh/', label: 'ВСОШ', group: 'Аттестация и олимпиады' },
+        { href: '/students/ege/', label: 'ЕГЭ', group: 'Аттестация и олимпиады' },
+        { href: '/students/oge/', label: 'ОГЭ', group: 'Аттестация и олимпиады' },
+        { href: '/students/psychological-service/', label: 'Психологическая служба', group: 'Поддержка' },
+        { href: '/students/employment/', label: 'Содействие трудоустройству', group: 'Поддержка' },
+        { href: '/students/educational-work/', label: 'Воспитательная работа', group: 'Поддержка' },
+        { href: '/safety/', label: 'Безопасность', group: 'Поддержка' }
+      ]
+    },
+    {
+      label: 'Новости и творчество',
+      children: [
+        { href: '/news/', label: 'Новости', group: 'Медиа' },
+        { href: '/events/', label: 'Афиша', group: 'Медиа' },
+        { href: '/events/concerts/', label: 'Концерты', group: 'Медиа' },
+        { href: '/events/competitions/', label: 'Конкурсы', group: 'Медиа' },
+        { href: '/gallery/', label: 'Галерея', group: 'Медиа' },
+        { href: '/culture-for-schoolchildren/', label: 'Культура для школьников', group: 'Культура для школьников' },
+        { href: '/culture-for-schoolchildren/roadmap/', label: 'Дорожная карта проекта', group: 'Культура для школьников' },
+        { href: '/culture-for-schoolchildren/recommendations/', label: 'Методические рекомендации', group: 'Культура для школьников' },
+        { href: '/culture-for-schoolchildren/mentors/', label: 'Региональные наставники', group: 'Культура для школьников' },
+        { href: '/culture-for-schoolchildren/actions/', label: 'Всероссийские акции', group: 'Культура для школьников' },
+        { href: '/resources/', label: 'Онлайн-ресурсы', group: 'Онлайн-ресурсы' },
+        { href: '/resources/ballet-buryatia-dictionary/', label: 'Словарь «Балет Бурятии»', group: 'Онлайн-ресурсы' }
+      ]
+    },
+    {
+      label: 'Сведения',
+      children: [
+        { href: '/sveden/', label: 'Все сведения об образовательной организации', group: 'Обзор' },
+        ...mandatoryDisclosureLinks,
+        ...institutionalNavigation.map((item) => ({ ...item, group: 'Сервисы и открытость' })),
+        { href: '/documents/', label: 'Документы колледжа', group: 'Сервисы и открытость' },
+        ...legacyDisclosureLinks,
+        { href: '/privacy/', label: 'Политика обработки персональных данных', group: 'Правовая информация' },
+        { href: '/consent/', label: 'Согласие на обработку персональных данных', group: 'Правовая информация' },
+        { href: '/accessibility/', label: 'Доступность сайта', group: 'Правовая информация' },
+        { href: '/sitemap/', label: 'Карта сайта', group: 'Навигация' }
+      ]
+    },
     { href: '/admission/', label: 'Поступить', cta: true }
   ],
   utilityNavigation: [
+    { href: '/contacts/', label: 'Контакты' },
+    { href: '/sitemap/', label: 'Карта сайта' },
     { href: '/sveden/', label: 'Сведения об организации' }
   ],
   quickLinks: [
@@ -53,18 +155,26 @@ export const site = {
     { href: '/students/', label: 'Студентам' },
     { href: '/news/', label: 'Новости' },
     { href: '/documents/', label: 'Документы' },
-    { href: '/sveden/', label: 'Сведения об организации' }
+    { href: '/sveden/', label: 'Сведения об организации' },
+    { href: '/sitemap/', label: 'Карта сайта' }
   ],
   footerNavigation: [
     { href: '/about/', label: 'О колледже' },
     { href: '/education/', label: 'Образование' },
     { href: '/admission/', label: 'Поступление' },
-    { href: '/news/', label: 'Новости' }
+    { href: '/news/', label: 'Новости' },
+    { href: '/sveden/', label: 'Сведения' },
+    { href: '/sitemap/', label: 'Карта сайта' }
   ],
+  institutionalNavigation,
   legalNavigation: [
     { href: '/privacy/', label: 'Персональные данные' },
     { href: '/consent/', label: 'Согласие' },
     { href: '/accessibility/', label: 'Доступность сайта' }
+  ],
+  officialNavigation: [
+    { href: 'https://edu.gov.ru/', label: 'Минпросвещения России' },
+    { href: 'https://minobrnauki.gov.ru/', label: 'Минобрнауки России' }
   ],
   contacts: {
     city: 'Улан-Удэ',

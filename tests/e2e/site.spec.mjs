@@ -163,14 +163,16 @@ test('news remains a two-column mixed editorial grid at 390px', async ({ page },
   await testInfo.attach('news-390', { body: screenshot, contentType: 'image/png' });
 });
 
-test('mobile menu supports keyboard open, Escape close and focus restoration', async ({ page }) => {
+test('mobile menu opens the Sveden disclosure and closes it before the overlay on Escape', async ({ page }) => {
   const browserErrors = captureBrowserErrors(page);
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/', { waitUntil: 'networkidle' });
 
   const menuButton = page.locator('#menu-button');
   const navigation = page.locator('#primary-nav');
-  const firstNavigationLink = navigation.getByRole('link').first();
+  const firstNavigationSummary = navigation.locator('[data-nav-summary]').first();
+  const svedenSummary = navigation.locator('[data-nav-summary]').filter({ hasText: 'Сведения' });
+  const svedenDisclosure = svedenSummary.locator('..');
 
   await expect(menuButton).toBeVisible();
   await expect(menuButton).toHaveAttribute('aria-expanded', 'false');
@@ -181,7 +183,18 @@ test('mobile menu supports keyboard open, Escape close and focus restoration', a
   await expect(menuButton).toHaveText('Закрыть');
   await expect(navigation).toHaveClass(/\bopen\b/);
   await expect(page.locator('body')).toHaveClass(/\bmenu-open\b/);
-  await expect(firstNavigationLink).toBeFocused();
+  await expect(firstNavigationSummary).toBeFocused();
+
+  await svedenSummary.focus();
+  await svedenSummary.press('Enter');
+  await expect(svedenDisclosure).toHaveAttribute('open', '');
+  await expect(svedenDisclosure.locator('a[href="/sveden/"]')).toBeVisible();
+
+  await page.keyboard.press('Escape');
+  await expect(svedenDisclosure).not.toHaveAttribute('open', '');
+  await expect(svedenSummary).toBeFocused();
+  await expect(menuButton).toHaveAttribute('aria-expanded', 'true');
+  await expect(navigation).toHaveClass(/\bopen\b/);
 
   await page.keyboard.press('Escape');
   await expect(menuButton).toHaveAttribute('aria-expanded', 'false');
@@ -190,6 +203,99 @@ test('mobile menu supports keyboard open, Escape close and focus restoration', a
   await expect(page.locator('body')).not.toHaveClass(/\bmenu-open\b/);
   await expect(menuButton).toBeFocused();
   expect(browserErrors).toEqual([]);
+});
+
+test('desktop hierarchical navigation supports click, keyboard, Escape and exact current state', async ({ page }) => {
+  const browserErrors = captureBrowserErrors(page);
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto('/sveden/common/', { waitUntil: 'networkidle' });
+
+  const navigation = page.locator('#primary-nav');
+  const collegeSummary = navigation.locator('[data-nav-summary]').filter({ hasText: 'Колледж' });
+  const collegeDisclosure = collegeSummary.locator('..');
+  const svedenSummary = navigation.locator('[data-nav-summary]').filter({ hasText: 'Сведения' });
+  const svedenDisclosure = svedenSummary.locator('..');
+  const currentLink = svedenDisclosure.locator('a[href="/sveden/common/"]');
+
+  await collegeSummary.click();
+  await expect(collegeDisclosure).toHaveAttribute('open', '');
+
+  await svedenSummary.click();
+  await expect(svedenDisclosure).toHaveAttribute('open', '');
+  await expect(collegeDisclosure).not.toHaveAttribute('open', '');
+  await expect(currentLink).toBeVisible();
+  await expect(currentLink).toHaveAttribute('aria-current', 'page');
+  await expect(svedenDisclosure.locator('a[aria-current="page"]')).toHaveCount(1);
+
+  await page.keyboard.press('Escape');
+  await expect(svedenDisclosure).not.toHaveAttribute('open', '');
+  await expect(svedenSummary).toBeFocused();
+
+  await svedenSummary.press('Enter');
+  await expect(svedenDisclosure).toHaveAttribute('open', '');
+  await expect(currentLink).toHaveAttribute('aria-current', 'page');
+  expect(browserErrors).toEqual([]);
+});
+
+test('Sveden index, contextual directory and site map preserve the information architecture', async ({ page }) => {
+  const mandatorySections = svedenSections.filter((section) => section.group === 'mandatory');
+  const legacySections = svedenSections.filter((section) => section.group === 'legacy');
+
+  await page.goto('/sveden/', { waitUntil: 'networkidle' });
+  const disclosureGroups = page.locator('.disclosure-group');
+  await expect(disclosureGroups).toHaveCount(2);
+  await expect(disclosureGroups.nth(0).getByRole('heading', { level: 2 })).toHaveText('Обязательные подразделы');
+  await expect(disclosureGroups.nth(0).locator('.sveden-grid > a')).toHaveCount(mandatorySections.length);
+  await expect(disclosureGroups.nth(1).getByRole('heading', { level: 2 })).toHaveText('Сервисы и открытость');
+  for (const section of legacySections) {
+    await expect(disclosureGroups.nth(1).locator(`a[href="${section.href}"]`)).toBeVisible();
+  }
+  await expect(disclosureGroups.nth(1).locator('a[href="/students/psychological-service/"]')).toBeVisible();
+
+  await page.goto('/sveden/managers/', { waitUntil: 'networkidle' });
+  const mandatoryDirectory = page.locator('.disclosure-directory details').nth(0);
+  await expect(mandatoryDirectory).toHaveAttribute('open', '');
+  await expect(mandatoryDirectory.locator('a[href="/sveden/managers/"]')).toHaveAttribute('aria-current', 'page');
+
+  await page.goto('/students/psychological-service/', { waitUntil: 'networkidle' });
+  const supplementalDirectory = page.locator('.disclosure-directory details').nth(1);
+  await expect(supplementalDirectory).toHaveAttribute('open', '');
+  await expect(supplementalDirectory.locator('a[href="/students/psychological-service/"]')).toHaveAttribute('aria-current', 'page');
+
+  await page.goto('/sitemap/', { waitUntil: 'networkidle' });
+  await expect(page.locator('.site-map-grid')).toBeVisible();
+  await expect(page.locator('.site-map-section')).toHaveCount(7);
+  await expect(page.locator('.site-map-grid a[href="/sveden/managers/"]')).toBeVisible();
+  await expect(page.locator('.site-map-grid a[href="/students/psychological-service/"]').first()).toBeVisible();
+  await expect(page.locator('.site-map-grid a[href="/resources/ballet-buryatia-dictionary/"]')).toBeVisible();
+});
+
+test('new institutional routes and hierarchical navigation remain filled with JavaScript disabled', async ({ browser }) => {
+  const context = await browser.newContext({ javaScriptEnabled: false, locale: 'ru-RU' });
+  const page = await context.newPage();
+
+  try {
+    await page.goto('/students/psychological-service/', { waitUntil: 'domcontentloaded' });
+    await expect(page.locator('html')).not.toHaveClass(/\bnav-enhanced\b/);
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('Психологическая служба');
+    await expect(page.locator('.legal-note')).toContainText('Утверждённые материалы не переданы для публикации');
+    await expect(page.locator('#primary-nav [data-nav-summary]').filter({ hasText: 'Сведения' })).toHaveCount(1);
+    await expect(page.locator('#primary-nav a[href="/students/psychological-service/"]')).toHaveCount(2);
+    await expect(page.locator('.disclosure-directory a[href="/students/psychological-service/"]')).toHaveAttribute('aria-current', 'page');
+
+    await page.goto('/sveden/managers/', { waitUntil: 'domcontentloaded' });
+    await expect(page.getByRole('heading', { level: 1 })).toContainText('Руководство');
+    await expect(page.locator('.disclosure-directory a[href="/sveden/managers/"]')).toHaveAttribute('aria-current', 'page');
+    await expect(page.locator('#primary-nav a[href="/sveden/managers/"]')).toHaveAttribute('aria-current', 'page');
+
+    await page.goto('/sitemap/', { waitUntil: 'domcontentloaded' });
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('Карта сайта');
+    await expect(page.locator('.site-map-grid')).toBeVisible();
+    await expect(page.locator('.site-map-grid a[href="/sveden/managers/"]')).toBeVisible();
+    await expect(page.locator('.site-map-grid a[href="/culture-for-schoolchildren/roadmap/"]')).toBeVisible();
+  } finally {
+    await context.close();
+  }
 });
 
 test('accessibility settings persist, reset and keep dialog focus deterministic', async ({ page }) => {

@@ -4,7 +4,7 @@ import { existsSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync 
 import { join, resolve } from 'node:path';
 import test from 'node:test';
 import { loadContent } from '../src/content/load-content.mjs';
-import { REQUIRED_ROUTES } from '../src/content/required-routes.mjs';
+import { REQUIRED_ROUTES, SVEDEN_REQUIRED_ROUTES } from '../src/content/required-routes.mjs';
 import { collectPublicRoutes } from '../src/content/validate.mjs';
 
 const projectRoot = resolve(import.meta.dirname, '..');
@@ -122,10 +122,16 @@ test('no generated text asset contains the raw GitHub runtime loader', () => {
 });
 
 test('mandatory sveden routes and education hierarchy are preserved', () => {
-  assert.equal(svedenSections.length, 14);
+  assert.equal(svedenSections.filter((section) => section.group === 'mandatory').length, 14);
+  assert.ok(svedenSections.length >= SVEDEN_REQUIRED_ROUTES.length);
   const indexHtml = readRoute('/sveden/');
+  for (const route of SVEDEN_REQUIRED_ROUTES) {
+    const section = svedenSections.find((item) => item.href === route);
+    assert.ok(section, `${route}: mandatory section data is missing`);
+    assert.equal(section.group, 'mandatory', `${route}: wrong disclosure group`);
+    assert.ok(existsSync(routeFile(route)), `${route}: mandatory route is missing`);
+  }
   for (const section of svedenSections) {
-    assert.ok(existsSync(routeFile(section.href)), `${section.href}: mandatory route is missing`);
     assert.ok(indexHtml.includes(`href="${section.href}"`), `${section.href}: missing from /sveden/ index`);
   }
 
@@ -140,6 +146,39 @@ test('mandatory sveden routes and education hierarchy are preserved', () => {
   for (const route of publicRoutes) {
     assert.ok(!readRoute(route).includes('Новые проекты'), `${route}: removed block title returned`);
   }
+});
+
+test('hierarchical navigation and service pages are present in server HTML', () => {
+  const home = readRoute('/');
+  assert.match(home, /<details class="nav-disclosure[^>]*" data-nav-disclosure>/);
+  assert.match(home, /<summary data-nav-summary><span>Сведения<\/span>/);
+  assert.ok(home.includes('href="/students/psychological-service/"'));
+  assert.ok(home.includes('href="/documents/sout/"'));
+  assert.ok(home.includes('href="/culture-for-schoolchildren/"'));
+  assert.ok(home.includes('href="/resources/ballet-buryatia-dictionary/"'));
+
+  const sveden = readRoute('/sveden/');
+  assert.match(sveden, /Обязательные подразделы/);
+  assert.match(sveden, /Сервисы и открытость/);
+  assert.ok(sveden.includes('href="/sveden/managers/"'));
+  assert.ok(sveden.includes('href="/sveden/ovz/"'));
+
+  const detail = readRoute('/students/psychological-service/');
+  assert.match(detail, /aria-label="Разделы сведений"/);
+  assert.match(detail, /Утверждённые материалы не переданы для публикации/);
+  assert.doesNotMatch(detail, /Яковлева Оксана Борисовна/);
+
+  const siteMap = readRoute('/sitemap/');
+  for (const route of REQUIRED_ROUTES) {
+    if (route === '/') continue;
+    assert.ok(siteMap.includes(`href="${route}"`) || route.startsWith('/news/'), `${route}: missing from HTML site map`);
+  }
+});
+
+test('footer exposes the official federal education resources', () => {
+  const html = readRoute('/');
+  assert.match(html, /href="https:\/\/edu\.gov\.ru\/" rel="external">Минпросвещения России<\/a>/);
+  assert.match(html, /href="https:\/\/minobrnauki\.gov\.ru\/" rel="external">Минобрнауки России<\/a>/);
 });
 
 test('official logo, favicon and hashed first-party assets are emitted', () => {
@@ -179,6 +218,18 @@ test('sitemap contains every public route once', () => {
   for (const route of publicRoutes) {
     assert.ok(locations.some((location) => new URL(location).pathname === route), `${route}: absent from sitemap`);
   }
+});
+
+test('handoff route map documents every public route exactly once', () => {
+  const routeMap = readFileSync(join(projectRoot, 'docs', 'ROUTE-MAP.csv'), 'utf8')
+    .split(/\r?\n/)
+    .slice(1)
+    .filter(Boolean)
+    .map((line) => line.match(/^"([^"]+)"/)?.[1]);
+
+  assert.ok(routeMap.every(Boolean), 'ROUTE-MAP.csv contains a row without a quoted route');
+  assert.equal(new Set(routeMap).size, routeMap.length, 'ROUTE-MAP.csv contains duplicate routes');
+  assert.deepEqual([...routeMap].sort(), [...publicRoutes].sort());
 });
 
 test('content media is fingerprinted and the public manifest exposes safe provenance metadata', () => {

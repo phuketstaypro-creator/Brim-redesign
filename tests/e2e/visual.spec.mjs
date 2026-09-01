@@ -15,7 +15,13 @@ const matrix = [
   { name: 'education-1440', route: '/education/', width: 1440, height: 1000 },
   { name: 'sveden-390', route: '/sveden/', width: 390, height: 844 },
   { name: 'sveden-1440', route: '/sveden/', width: 1440, height: 1000 },
+  { name: 'sveden-managers-390', route: '/sveden/managers/', width: 390, height: 844 },
+  { name: 'sveden-managers-1440', route: '/sveden/managers/', width: 1440, height: 1000 },
+  { name: 'sitemap-390', route: '/sitemap/', width: 390, height: 844 },
+  { name: 'sitemap-1440', route: '/sitemap/', width: 1440, height: 1000 },
   { name: 'menu-open-390', route: '/', width: 390, height: 844, state: 'menu', fullPage: false },
+  { name: 'menu-sveden-open-390', route: '/', width: 390, height: 844, state: 'menu-sveden', fullPage: false },
+  { name: 'nav-sveden-open-1440', route: '/sveden/common/', width: 1440, height: 1000, state: 'sveden-nav', fullPage: false },
   { name: 'accessibility-open-390', route: '/', width: 390, height: 844, state: 'accessibility', fullPage: false }
 ];
 
@@ -30,11 +36,19 @@ async function loadWholePage(page) {
 }
 
 async function prepareState(page, state) {
-  if (state === 'menu') {
+  if (state === 'menu' || state === 'menu-sveden') {
     const button = page.locator('#menu-button');
     await button.click();
     await expect(button).toHaveAttribute('aria-expanded', 'true');
     await expect(page.locator('#primary-nav')).toHaveClass(/\bopen\b/);
+  }
+
+  if (state === 'menu-sveden' || state === 'sveden-nav') {
+    const summary = page.locator('#primary-nav [data-nav-summary]').filter({ hasText: 'Сведения' });
+    const disclosure = summary.locator('..');
+    await summary.click();
+    await expect(disclosure).toHaveAttribute('open', '');
+    await expect(disclosure.locator('a[href="/sveden/"]')).toBeVisible();
   }
 
   if (state === 'accessibility') {

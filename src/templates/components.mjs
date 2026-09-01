@@ -69,8 +69,47 @@ export function pageHero(kicker, title, description, mediaId) {
   return `<section class="page-hero">${visual}<div class="wrap page-hero-inner"><div class="eyebrow">${esc(kicker)}</div><h1>${esc(title)}</h1><p>${esc(description)}</p></div></section>`;
 }
 
-export function sideNavigation(items = []) {
-  return `<aside class="side-card"><h2>Разделы сайта</h2>${items.map((item) => `<a href="${esc(item.href)}">${esc(item.label)}</a>`).join('')}</aside>`;
+function currentAttribute(route, href) {
+  return route && href && route === href ? ' aria-current="page"' : '';
+}
+
+function groupedNavigationItems(items = []) {
+  const groups = new Map();
+  for (const item of items) {
+    const label = typeof item?.group === 'string' && item.group.trim() ? item.group.trim() : '';
+    if (!groups.has(label)) groups.set(label, []);
+    groups.get(label).push(item);
+  }
+  return groups;
+}
+
+export function sideNavigation(items = [], { title = 'Разделы сайта', route = '' } = {}) {
+  return `<aside class="side-card"><nav aria-label="${esc(title)}"><h2>${esc(title)}</h2>${items.map((item) => `<a href="${esc(item.href)}"${currentAttribute(route, item.href)}>${esc(item.label)}</a>`).join('')}</nav></aside>`;
+}
+
+export function disclosureDirectory(svedenSections = [], institutionalNavigation = [], route = '') {
+  const mandatory = svedenSections.filter((section) => section.group === 'mandatory');
+  const legacy = svedenSections.filter((section) => section.group === 'legacy');
+  const links = (items) => `<ul>${items.map((item) => `<li><a href="${esc(item.href)}"${currentAttribute(route, item.href)}>${esc(item.title || item.label)}</a></li>`).join('')}</ul>`;
+  const supplemental = [
+    ...institutionalNavigation.map((item) => ({ ...item, title: item.label })),
+    ...legacy
+  ];
+  const supplementalOpen = supplemental.some((item) => item.href === route) ? ' open' : '';
+
+  return `<aside class="side-card disclosure-directory"><nav aria-label="Разделы сведений"><h2>Сведения об организации</h2><a class="directory-overview" href="/sveden/"${currentAttribute(route, '/sveden/')}>Все сведения</a><details open><summary>Обязательные подразделы</summary>${links(mandatory)}</details><details${supplementalOpen}><summary>Сервисы и открытость</summary>${links(supplemental)}</details></nav></aside>`;
+}
+
+export function navigationDirectory(items = [], route = '') {
+  return `<div class="site-map-grid">${items.map((item, index) => {
+    const children = Array.isArray(item.children) ? item.children : [];
+    const heading = item.href
+      ? `<h2><a href="${esc(item.href)}"${currentAttribute(route, item.href)}>${esc(item.label)}</a></h2>`
+      : `<h2>${esc(item.label)}</h2>`;
+    if (!children.length) return `<section class="site-map-section"><span class="site-map-index">${String(index + 1).padStart(2, '0')}</span>${heading}</section>`;
+    const groups = [...groupedNavigationItems(children).entries()];
+    return `<section class="site-map-section"><span class="site-map-index">${String(index + 1).padStart(2, '0')}</span>${heading}<div class="site-map-groups">${groups.map(([group, links]) => `<div>${group ? `<h3>${esc(group)}</h3>` : ''}<ul>${links.map((link) => `<li><a href="${esc(link.href)}"${currentAttribute(route, link.href)}>${esc(link.label)}</a></li>`).join('')}</ul></div>`).join('')}</div></section>`;
+  }).join('')}</div>`;
 }
 
 export function cardGrid(sections = []) {

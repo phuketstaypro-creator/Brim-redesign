@@ -9,6 +9,7 @@ import { SVEDEN_REQUIRED_ROUTES, missingRequiredRoutes } from './required-routes
 const identifierPattern = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
 const rightsStatuses = new Set(MEDIA_RIGHTS_STATUSES);
 const editorialVariants = new Set(['featured', 'wide', 'portrait', 'square', 'standard']);
+const svedenGroups = new Set(['mandatory', 'legacy']);
 
 export function isSafePublicRoute(value) {
   if (value === '/') return true;
@@ -120,14 +121,46 @@ function isSafeContentLink(value) {
     && /^(?:mailto:|tel:)[^\s]+$/i.test(value);
 }
 
-function validateLinkCollection(value, field, issues) {
+function validateLinkCollection(value, field, issues, { maxDepth = 0 } = {}) {
   const items = requiredArray(value, field, issues);
   if (!items) return;
-  items.forEach((item, index) => {
-    const prefix = `${field}[${index}]`;
+
+  const validateItem = (item, index, parentField, depth) => {
+    const prefix = `${parentField}[${index}]`;
     if (!requiredObject(item, prefix, issues)) return;
     requiredString(item.label, `${prefix}.label`, issues);
-    if (!isSafeContentLink(item.href)) issues.push(`${prefix}.href must be a safe public, HTTPS, mailto or tel URL`);
+    if (item.group !== undefined) requiredString(item.group, `${prefix}.group`, issues);
+    if (item.cta !== undefined && typeof item.cta !== 'boolean') issues.push(`${prefix}.cta must be a boolean`);
+
+    const hasHref = item.href !== undefined && item.href !== null && item.href !== '';
+    if (hasHref && !isSafeContentLink(item.href)) {
+      issues.push(`${prefix}.href must be a safe public, HTTPS, mailto or tel URL`);
+    }
+
+    if (item.children !== undefined) {
+      const children = requiredArray(item.children, `${prefix}.children`, issues);
+      if (children && !children.length) issues.push(`${prefix}.children must contain at least one item`);
+      if (depth >= maxDepth) {
+        issues.push(`${prefix}.children exceeds the supported navigation depth`);
+      } else {
+        children?.forEach((child, childIndex) => validateItem(child, childIndex, `${prefix}.children`, depth + 1));
+      }
+    } else if (!hasHref) {
+      issues.push(`${prefix} must contain href or non-empty children`);
+    }
+  };
+
+  items.forEach((item, index) => validateItem(item, index, field, 0));
+}
+
+function validateNavigationTargets(items, field, routes, issues) {
+  if (!Array.isArray(items)) return;
+  items.forEach((item, index) => {
+    const prefix = `${field}[${index}]`;
+    if (isSafePublicRoute(item?.href) && !routes.has(item.href)) {
+      issues.push(`${prefix}.href points to a missing public route ${JSON.stringify(item.href)}`);
+    }
+    validateNavigationTargets(item?.children, `${prefix}.children`, routes, issues);
   });
 }
 
@@ -186,7 +219,8 @@ function validateSite(site, issues) {
     requiredString(logo.alt, 'site.assets.logo.alt', issues);
   }
 
-  for (const field of ['navigation', 'utilityNavigation', 'quickLinks', 'sideNavigation', 'footerNavigation', 'legalNavigation']) {
+  validateLinkCollection(site.navigation, 'site.navigation', issues, { maxDepth: 1 });
+  for (const field of ['utilityNavigation', 'quickLinks', 'sideNavigation', 'footerNavigation', 'legalNavigation', 'officialNavigation', 'institutionalNavigation']) {
     validateLinkCollection(site[field], `site.${field}`, issues);
   }
 
@@ -442,6 +476,12 @@ export function validateContent(content) {
     }
     requiredString(page.title, `pages[${JSON.stringify(route)}].title`, issues);
     requiredString(page.description, `pages[${JSON.stringify(route)}].description`, issues);
+    if (page.structureOnly !== undefined && typeof page.structureOnly !== 'boolean') {
+      issues.push(`pages[${JSON.stringify(route)}].structureOnly must be a boolean`);
+    }
+    if (page.siteMap !== undefined && typeof page.siteMap !== 'boolean') {
+      issues.push(`pages[${JSON.stringify(route)}].siteMap must be a boolean`);
+    }
     validateSectionPairs(page.sections, `pages[${JSON.stringify(route)}].sections`, issues, { nullable: false });
     if (page.documents !== null && page.documents !== undefined) {
       const documentNames = requiredArray(page.documents, `pages[${JSON.stringify(route)}].documents`, issues);
@@ -548,6 +588,7 @@ export function validateContent(content) {
   content.svedenSections.forEach((item, index) => {
     const prefix = `svedenSections[${index}]`;
     requiredString(item.title, `${prefix}.title`, issues);
+    if (!svedenGroups.has(item.group)) issues.push(`${prefix}.group must be mandatory or legacy`);
     if (validateRoute(item.href, `${prefix}.href`, issues)) {
       if (seenSvedenRoutes.has(item.href)) {
         issues.push(`svedenSections contains duplicate href ${JSON.stringify(item.href)}`);
@@ -556,9 +597,14 @@ export function validateContent(content) {
     }
     validateLinkedItems(item.documents, `${prefix}.documents`, issues);
     validateSectionPairs(item.sections, `${prefix}.sections`, issues);
+    if (item.body !== null && item.body !== undefined && typeof item.body !== 'string' && !Array.isArray(item.body)) {
+      issues.push(`${prefix}.body must be a string, rich-text block array or null`);
+    }
   });
   for (const route of SVEDEN_REQUIRED_ROUTES) {
-    if (!seenSvedenRoutes.has(route)) issues.push(`svedenSections is missing required item ${route}`);
+    const section = content.svedenSections.find((item) => item.href === route);
+    if (!section) issues.push(`svedenSections is missing required item ${route}`);
+    else if (section.group !== 'mandatory') issues.push(`svedenSections required item ${route} must use group mandatory`);
   }
 
   const routes = collectPublicRoutes(content);
@@ -571,6 +617,11 @@ export function validateContent(content) {
   for (const route of missingRequiredRoutes(seenRoutes)) {
     issues.push(`required public route is missing: ${route}`);
   }
+
+  for (const field of ['navigation', 'utilityNavigation', 'quickLinks', 'sideNavigation', 'footerNavigation', 'legalNavigation', 'officialNavigation', 'institutionalNavigation']) {
+    validateNavigationTargets(content.site[field], `site.${field}`, seenRoutes, issues);
+  }
+  validateNavigationTargets(content.site.home?.hero?.actions, 'site.home.hero.actions', seenRoutes, issues);
 
   validateMedia(content.media, issues);
   validateMediaReferences(content, issues);

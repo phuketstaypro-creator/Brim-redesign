@@ -2,8 +2,7 @@ import { esc } from './components.mjs';
 
 function activeAttribute(route, href) {
   if (!route || !href || !href.startsWith('/')) return '';
-  if (href === '/') return route === '/' ? ' aria-current="page"' : '';
-  return route.startsWith(href) ? ' aria-current="page"' : '';
+  return route === href ? ' aria-current="page"' : '';
 }
 
 function asArray(value) {
@@ -37,15 +36,67 @@ function linkItems(items) {
   });
 }
 
+function isCurrentRoute(route, href) {
+  return Boolean(route && href && href.startsWith('/') && route === href);
+}
+
+function navigationItems(items) {
+  return asArray(items).flatMap((item) => {
+    const label = asText(item?.label);
+    const href = safeUrl(item?.href);
+    const children = linkItems(item?.children).map((child) => ({
+      ...child,
+      group: asText(child.group)
+    }));
+    if (!label || (!href && !children.length)) return [];
+    return [{ ...item, label, href, children }];
+  });
+}
+
+function groupedNavigationChildren(children) {
+  const groups = new Map();
+  for (const child of children) {
+    const key = child.group || '';
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(child);
+  }
+  return [...groups.entries()].map(([label, links]) => ({ label, links }));
+}
+
+function childNavigation(children, route, itemIndex) {
+  return groupedNavigationChildren(children).map((group, groupIndex) => {
+    const labelId = `nav-panel-label-${itemIndex}-${groupIndex}`;
+    const label = group.label
+      ? `<span class="nav-panel-label" id="${labelId}">${esc(group.label)}</span>`
+      : '';
+    const groupAttributes = group.label ? ` role="group" aria-labelledby="${labelId}"` : '';
+    const links = group.links.map(({ href, label: childLabel }) => `<li><a href="${esc(href)}"${activeAttribute(route, href)} data-nav-child>${esc(childLabel)}</a></li>`).join('');
+    return `<div class="nav-panel-group"${groupAttributes}>${label}<ul class="nav-panel-list">${links}</ul></div>`;
+  }).join('');
+}
+
 function navigation(items, route) {
-  return linkItems(items).map(({ href, label, cta }) => {
-    const className = cta ? ' class="nav-cta"' : '';
-    return `<li><a${className} href="${esc(href)}"${activeAttribute(route, href)}>${esc(label)}</a></li>`;
+  return navigationItems(items).map(({ href, label, cta, children }, itemIndex) => {
+    if (!children.length) {
+      const className = cta ? ' class="nav-cta"' : '';
+      return `<li class="nav-item"><a${className} href="${esc(href)}"${activeAttribute(route, href)}>${esc(label)}</a></li>`;
+    }
+
+    const groupIsActive = isCurrentRoute(route, href) || children.some((child) => isCurrentRoute(route, child.href));
+    const activeClass = groupIsActive ? ' is-active' : '';
+    const largeClass = children.length >= 8 ? ' is-large' : '';
+    const overview = href
+      ? `<a class="nav-overview" href="${esc(href)}"${activeAttribute(route, href)}><span>${esc(label)}</span><span aria-hidden="true">→</span></a>`
+      : '';
+    return `<li class="nav-item nav-item-group${activeClass}"><details class="nav-disclosure${largeClass}${activeClass}" data-nav-disclosure><summary data-nav-summary><span>${esc(label)}</span><span class="nav-summary-icon" aria-hidden="true"></span></summary><div class="nav-panel" data-nav-panel><div class="nav-panel-inner">${overview}<div class="nav-panel-groups">${childNavigation(children, route, itemIndex)}</div></div></div></details></li>`;
   }).join('');
 }
 
 function inlineLinks(items) {
-  return linkItems(items).map(({ href, label }) => `<a href="${esc(href)}">${esc(label)}</a>`).join('');
+  return linkItems(items).map(({ href, label }) => {
+    const external = /^https?:\/\//i.test(href) ? ' rel="external"' : '';
+    return `<a href="${esc(href)}"${external}>${esc(label)}</a>`;
+  }).join('');
 }
 
 function logoImage(logo, className, alt) {
@@ -92,6 +143,7 @@ export function renderLayout({ site, route, title, description, content, cssHref
   const quickLinks = inlineLinks(siteData.quickLinks);
   const footerNavigation = inlineLinks(siteData.footerNavigation);
   const legalNavigation = inlineLinks(siteData.legalNavigation);
+  const officialNavigation = inlineLinks(siteData.officialNavigation);
   const footerStatus = asText(siteData.footer?.status);
   const footerDisclaimer = asText(siteData.footer?.disclaimer);
 
@@ -145,13 +197,13 @@ export function renderLayout({ site, route, title, description, content, cssHref
 
   <div class="utility"><div class="wrap utility-inner"><span class="utility-label">${esc(siteData.utilityLabel)}</span><div class="utility-actions"><button type="button" data-search-open>Поиск</button><button type="button" data-access-open>Версия для слабовидящих</button>${utilityNavigation}</div></div></div>
 
-  <header class="site-header"><div class="wrap header-inner"><a class="brand" href="/" aria-label="${esc(brandAriaLabel)}"><span class="brand-logo-wrap" aria-hidden="true">${logoImage(logo, 'brand-logo', '')}</span><span class="brand-text">${esc(brandName)}</span></a><nav class="primary-nav" id="primary-nav" aria-label="Основная навигация"><ul>${primaryNavigation}</ul></nav><button class="menu-button" id="menu-button" type="button" aria-controls="primary-nav" aria-expanded="false">Меню</button></div></header>
+  <header class="site-header"><div class="wrap header-inner"><a class="brand" href="/" aria-label="${esc(brandAriaLabel)}"><span class="brand-logo-wrap" aria-hidden="true">${logoImage(logo, 'brand-logo', '')}</span><span class="brand-text">${esc(brandName)}</span></a><nav class="primary-nav" id="primary-nav" aria-label="Основная навигация"><ul class="primary-nav-list" data-nav-list>${primaryNavigation}</ul></nav><button class="menu-button" id="menu-button" type="button" aria-controls="primary-nav" aria-expanded="false">Меню</button></div></header>
 
   ${content}
 
   <section class="quick-links" aria-labelledby="quick-links-title"><div class="wrap quick-grid"><h2 id="quick-links-title">Быстрый доступ</h2>${quickLinks}</div></section>
 
-  <footer class="site-footer"><div class="wrap footer-grid"><div class="footer-brand"><a class="footer-logo-link" href="/" aria-label="${esc(brandAriaLabel)}">${logoImage(logo, 'footer-logo', logo.alt || '')}</a><p>${esc(siteData.legalName)}</p></div><div><strong>Навигация</strong>${footerNavigation}</div><div><strong>Контакты</strong>${contactDetails(siteData.contacts)}</div><div><strong>Правовая информация</strong>${legalNavigation}</div></div><div class="wrap footer-bottom">${footerStatus ? `<span>${esc(footerStatus)}</span>` : ''}${footerDisclaimer ? `<span>${esc(footerDisclaimer)}</span>` : ''}</div></footer>
+  <footer class="site-footer"><div class="wrap footer-grid"><div class="footer-brand"><a class="footer-logo-link" href="/" aria-label="${esc(brandAriaLabel)}">${logoImage(logo, 'footer-logo', logo.alt || '')}</a><p>${esc(siteData.legalName)}</p></div><div><strong>Навигация</strong>${footerNavigation}</div><div><strong>Контакты</strong>${contactDetails(siteData.contacts)}</div><div><strong>Правовая информация</strong>${legalNavigation}</div><div><strong>Официальные ресурсы</strong>${officialNavigation}</div></div><div class="wrap footer-bottom">${footerStatus ? `<span>${esc(footerStatus)}</span>` : ''}${footerDisclaimer ? `<span>${esc(footerDisclaimer)}</span>` : ''}</div></footer>
 </body>
 </html>`;
 }

@@ -1,8 +1,12 @@
 const documentElement = document.documentElement;
+documentElement.classList.add('nav-enhanced');
+
 const body = document.body;
 const nav = document.getElementById('primary-nav');
 const menu = document.getElementById('menu-button');
 const header = document.querySelector('.site-header');
+const navDisclosures = nav ? [...nav.querySelectorAll('[data-nav-disclosure]')] : [];
+const navigationViewport = window.matchMedia('(max-width: 1080px)');
 const accessPanel = document.getElementById('access-panel');
 const searchModal = document.getElementById('search-modal');
 const searchInput = document.getElementById('site-search');
@@ -45,19 +49,52 @@ function applySettings() {
   }
 }
 
+function isMobileNavigation() {
+  return navigationViewport.matches;
+}
+
+function updateNavigationTop() {
+  if (!nav || !header) return;
+  nav.style.setProperty('--nav-top', `${Math.max(0, header.getBoundingClientRect().bottom)}px`);
+}
+
+function firstNavigationTarget() {
+  return nav?.querySelector('[data-nav-summary], .primary-nav-list > .nav-item > a') || null;
+}
+
+function closeNavigationDisclosure(disclosure, { restoreFocus = false } = {}) {
+  if (!disclosure?.open) return false;
+  disclosure.open = false;
+  if (restoreFocus) disclosure.querySelector('[data-nav-summary]')?.focus();
+  return true;
+}
+
+function closeNavigationDisclosures({ except = null } = {}) {
+  for (const disclosure of navDisclosures) {
+    if (disclosure !== except) closeNavigationDisclosure(disclosure);
+  }
+}
+
+function openNavigationDisclosure() {
+  return navDisclosures.find((disclosure) => disclosure.open) || null;
+}
+
 function setMenu(open, { restoreFocus = false } = {}) {
   if (!nav || !menu || !header) return;
+  if (open && !isMobileNavigation()) return;
   nav.classList.toggle('open', open);
   body.classList.toggle('menu-open', open);
   menu.setAttribute('aria-expanded', String(open));
   menu.textContent = open ? 'Закрыть' : 'Меню';
   if (open) {
-    nav.style.setProperty('--nav-top', `${Math.max(0, header.getBoundingClientRect().bottom)}px`);
+    updateNavigationTop();
     requestAnimationFrame(() => {
-      if (nav.classList.contains('open')) nav.querySelector('a')?.focus();
+      if (nav.classList.contains('open')) firstNavigationTarget()?.focus();
     });
-  } else if (restoreFocus) {
-    menu.focus();
+  } else {
+    nav.style.removeProperty('--nav-top');
+    closeNavigationDisclosures();
+    if (restoreFocus) menu.focus();
   }
 }
 
@@ -145,8 +182,25 @@ nav?.addEventListener('click', (event) => {
   if (event.target.closest('a')) setMenu(false);
 });
 
+for (const disclosure of navDisclosures) {
+  disclosure.addEventListener('toggle', () => {
+    if (disclosure.open) closeNavigationDisclosures({ except: disclosure });
+  });
+}
+
+navigationViewport.addEventListener('change', (event) => {
+  const focusWasInNavigation = Boolean(nav?.contains(document.activeElement));
+  const focusWasOnMenu = document.activeElement === menu;
+  setMenu(false);
+  closeNavigationDisclosures();
+  requestAnimationFrame(() => {
+    if (event.matches && focusWasInNavigation) menu?.focus();
+    else if (!event.matches && (focusWasInNavigation || focusWasOnMenu)) firstNavigationTarget()?.focus();
+  });
+});
+
 window.addEventListener('resize', () => {
-  if (window.innerWidth > 860) setMenu(false);
+  if (isMobileNavigation() && nav?.classList.contains('open')) updateNavigationTop();
 });
 
 document.addEventListener('click', (event) => {
@@ -162,21 +216,42 @@ document.addEventListener('click', (event) => {
   }
 
   const accessOpen = event.target.closest('[data-access-open]');
-  if (accessOpen) openDialog(accessPanel, accessOpen);
+  if (accessOpen) {
+    setMenu(false);
+    openDialog(accessPanel, accessOpen);
+  }
   if (event.target.closest('[data-access-close]')) closeDialog(accessPanel);
 
   const searchOpen = event.target.closest('[data-search-open]');
-  if (searchOpen) openDialog(searchModal, searchOpen, searchInput);
+  if (searchOpen) {
+    setMenu(false);
+    openDialog(searchModal, searchOpen, searchInput);
+  }
   if (event.target.closest('[data-search-close]')) closeDialog(searchModal);
 
   if (activeDialog && event.target === activeDialog) closeDialog(activeDialog);
+  if (!isMobileNavigation() && nav && !nav.contains(event.target)) closeNavigationDisclosures();
 });
 
 document.addEventListener('keydown', (event) => {
   trapDialogFocus(event);
   if (event.key !== 'Escape') return;
-  if (activeDialog) closeDialog(activeDialog);
-  else setMenu(false, { restoreFocus: true });
+  if (activeDialog) {
+    closeDialog(activeDialog);
+    return;
+  }
+
+  const disclosure = openNavigationDisclosure();
+  if (disclosure) {
+    event.preventDefault();
+    closeNavigationDisclosure(disclosure, { restoreFocus: true });
+    return;
+  }
+
+  if (nav?.classList.contains('open')) {
+    event.preventDefault();
+    setMenu(false, { restoreFocus: true });
+  }
 });
 
 searchInput?.addEventListener('input', async (event) => {

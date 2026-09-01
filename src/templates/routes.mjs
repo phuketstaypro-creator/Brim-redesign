@@ -1,6 +1,7 @@
 import {
   breadcrumbs,
   cardGrid,
+  disclosureDirectory,
   editorialNews,
   educationProgram,
   esc,
@@ -8,6 +9,7 @@ import {
   image,
   lines,
   mediaById,
+  navigationDirectory,
   pageHero,
   programCard,
   sectionHead,
@@ -178,8 +180,16 @@ function svedenContent(section) {
   return `${richText}${sections}${documents}`;
 }
 
-function svedenIndex(svedenSections) {
-  return `<div class="sveden-grid">${svedenSections.map((section) => `<a href="${esc(section.href)}">${esc(section.title)}</a>`).join('')}</div><div class="legal-note">Структура раздела подготовлена. Значения и документы подлежат сверке колледжем перед публикацией.</div>`;
+function structureOnlyNotice(page) {
+  if (!page.structureOnly) return '';
+  return '<div class="legal-note"><strong>Утверждённые материалы не переданы для публикации.</strong> На этой странице показана только структура будущего раздела. Фактические сведения, документы, внешние ссылки, даты и персональные данные подключаются только из подтверждённого экспорта CMS колледжа.</div>';
+}
+
+function svedenIndex(svedenSections, institutionalNavigation = []) {
+  const mandatory = svedenSections.filter((section) => section.group === 'mandatory');
+  const legacy = svedenSections.filter((section) => section.group === 'legacy');
+  const cards = (items) => `<div class="sveden-grid">${items.map((section) => `<a href="${esc(section.href)}">${esc(section.title || section.label)}</a>`).join('')}</div>`;
+  return `<section class="disclosure-group" aria-labelledby="mandatory-disclosure-title"><div class="disclosure-group-head"><span>01</span><div><h2 id="mandatory-disclosure-title">Обязательные подразделы</h2><p>Специальный раздел отделён от тематических страниц и доступен без регистрации.</p></div></div>${cards(mandatory)}</section><section class="disclosure-group" aria-labelledby="supplemental-disclosure-title"><div class="disclosure-group-head"><span>02</span><div><h2 id="supplemental-disclosure-title">Сервисы и открытость</h2><p>Эти страницы нужны пользователям и могут иметь собственные основания для публикации, но не подменяют обязательную структуру раздела.</p></div></div>${cards([...institutionalNavigation, ...legacy])}</section><div class="legal-note"><strong>Нормативная основа структуры:</strong> статья 29 Федерального закона № 273-ФЗ, постановление Правительства № 1802, приказ Рособрнадзора № 1493 и изменения к нему № 1353 и № 920. <a href="https://publication.pravo.gov.ru/document/0001202311290017" rel="external">Приказ № 1493</a> · <a href="https://publication.pravo.gov.ru/document/0001202510140008" rel="external">изменения № 1353</a> · <a href="https://minjust.consultant.ru/documents/60145" rel="external">изменения № 920</a>. Наличие страницы само по себе не подтверждает полноту обязательных сведений: содержание и машиночитаемая разметка должны пройти проверку колледжа.</div>`;
 }
 
 export function renderGeneric({ route, page, site, svedenSections, documents = [], events = [], employees = [] }) {
@@ -189,21 +199,27 @@ export function renderGeneric({ route, page, site, svedenSections, documents = [
   if (route === '/events/' && events.length) body = eventList(events);
   else if (route === '/sveden/employees/' && employees.length) body = employeeList(employees);
   else if (verifiedSvedenContent) body = verifiedSvedenContent;
+  else if (page.siteMap) body = navigationDirectory(site.navigation, route);
   else if (page.gallery) body = gallery(site.gallery);
   else if (page.documents) body = documentList(page, documents);
-  else if (page.sveden) body = svedenIndex(svedenSections);
-  else body = `<section class="prose"><h2>${esc(page.title)}</h2><p>${esc(page.description)}</p></section>${cardGrid(page.sections)}`;
+  else if (page.sveden) body = svedenIndex(svedenSections, site.institutionalNavigation);
+  else body = `<section class="prose"><h2>${esc(page.title)}</h2><p>${esc(page.description)}</p></section>${structureOnlyNotice(page)}${cardGrid(page.sections)}`;
 
-  const crumbItems = route.startsWith('/sveden/') && route !== '/sveden/'
+  const isDisclosureRoute = route.startsWith('/sveden/')
+    || site.institutionalNavigation?.some((item) => item.href === route);
+  const crumbItems = isDisclosureRoute && route !== '/sveden/'
     ? [{ href: '/', title: 'Главная' }, { href: '/sveden/', title: 'Сведения об организации' }, { title: page.title }]
     : [{ href: '/', title: 'Главная' }, { title: page.title }];
+  const directory = isDisclosureRoute
+    ? disclosureDirectory(svedenSections, site.institutionalNavigation, route)
+    : sideNavigation(site.sideNavigation, { route });
 
   return {
     route,
     title: page.seoTitle || page.title,
     description: page.description,
     image: socialImage(page.image),
-    content: `<main id="main">${pageHero(page.kicker, page.title, page.description, page.image)}${breadcrumbs(crumbItems)}<section class="page-section"><div class="wrap page-layout"><div>${body}</div>${sideNavigation(site.sideNavigation)}</div></section></main>`
+    content: `<main id="main">${pageHero(page.kicker, page.title, page.description, page.image)}${breadcrumbs(crumbItems)}<section class="page-section"><div class="wrap page-layout"><div>${body}</div>${directory}</div></section></main>`
   };
 }
 

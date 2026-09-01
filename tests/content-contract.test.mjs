@@ -4,7 +4,7 @@ import test from 'node:test';
 import { loadLocalContent } from '../src/content/adapters/local.mjs';
 import { ContentContractError } from '../src/content/contracts.mjs';
 import { loadContent } from '../src/content/load-content.mjs';
-import { REQUIRED_ROUTES } from '../src/content/required-routes.mjs';
+import { REQUIRED_ROUTES, SVEDEN_REQUIRED_ROUTES } from '../src/content/required-routes.mjs';
 import { assertIndexableMediaRights } from '../src/content/rights.mjs';
 import { collectPublicRoutes } from '../src/content/validate.mjs';
 import { renderRichText } from '../src/templates/rich-text.mjs';
@@ -16,9 +16,43 @@ test('local adapter returns a validated CMS-neutral bundle', async () => {
   const routes = new Set(collectPublicRoutes(content));
 
   assert.equal(content.schemaVersion, '1.0.0');
-  assert.equal(content.svedenSections.length, 14);
+  assert.equal(content.svedenSections.filter((section) => section.group === 'mandatory').length, 14);
+  assert.ok(content.svedenSections.length >= SVEDEN_REQUIRED_ROUTES.length);
   assert.ok(content.media.length >= 10);
   for (const route of REQUIRED_ROUTES) assert.ok(routes.has(route), route);
+});
+
+test('hierarchical navigation is validated recursively', async () => {
+  const valid = structuredClone(await loadLocalContent());
+  valid.site.navigation = [{
+    label: 'Group',
+    children: [{ href: '/about/', label: 'About', group: 'Section' }]
+  }];
+  await assert.doesNotReject(loadContent({ cwd: projectRoot, adapter: async () => valid }));
+
+  const mutations = [
+    (raw) => { raw.site.navigation = [{ label: 'Empty group', children: [] }]; },
+    (raw) => { raw.site.navigation[0].children[0].href = 'javascript:alert(1)'; },
+    (raw) => { raw.site.navigation[0].children[0].href = '/missing-navigation-target/'; },
+    (raw) => { raw.site.navigation[0].children[0].children = [{ href: '/about/', label: 'Too deep' }]; }
+  ];
+  for (const mutate of mutations) {
+    const raw = structuredClone(await loadLocalContent());
+    mutate(raw);
+    await assert.rejects(
+      loadContent({ cwd: projectRoot, adapter: async () => raw }),
+      ContentContractError
+    );
+  }
+});
+
+test('mandatory disclosure classification cannot be downgraded', async () => {
+  const raw = structuredClone(await loadLocalContent());
+  raw.svedenSections.find((section) => section.href === '/sveden/common/').group = 'legacy';
+  await assert.rejects(
+    loadContent({ cwd: projectRoot, adapter: async () => raw }),
+    (error) => error instanceof ContentContractError && error.message.includes('must use group mandatory')
+  );
 });
 
 test('published CMS collections may add routes without changing build code', async () => {
