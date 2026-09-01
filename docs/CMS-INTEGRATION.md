@@ -88,7 +88,13 @@ Normalizer исключает запись, если:
 
 ## Маршруты
 
-Route contract не фиксирует общее количество страниц. Массив `REQUIRED_ROUTES` содержит только обязательное подмножество: основные разделы, `/sveden/` и 14 его подразделов. Build завершается ошибкой, если любой из них исчез.
+Route contract не фиксирует общее количество страниц. В текущем local bundle `REQUIRED_ROUTES` состоит из трёх явно разделённых групп:
+
+- 16 `CORE_REQUIRED_ROUTES` — основные frontend-разделы, включая `/sveden/`;
+- 14 `SVEDEN_REQUIRED_ROUTES` — обязательные подразделы специального раздела;
+- 37 `PRESERVED_INFORMATION_ROUTES` — сохранённые тематические и институциональные адреса, включая legacy `/sveden/ovz/`.
+
+Build завершается ошибкой, если любой адрес из объединённого `REQUIRED_ROUTES` исчез. Это технический контракт передачи: нахождение тематической страницы в `PRESERVED_INFORMATION_ROUTES` не превращает её в обязательный подраздел приказа Рособрнадзора № 1493.
 
 Итоговый набор образуют:
 
@@ -97,7 +103,9 @@ Route contract не фиксирует общее количество стра�
 3. `href` всех опубликованных `newsItems`;
 4. `href` всех опубликованных `events`.
 
-Поэтому CMS может добавлять 1, 20 или больше новостей/событий без изменения `build.mjs`. Все маршруты должны начинаться и заканчиваться `/`, не содержать traversal, query или fragment. Дубликат любого публичного route останавливает build.
+Поэтому CMS может добавлять 1, 20 или больше новостей/событий без изменения `build.mjs`. Текущий local bundle создаёт 73 маршрута: 67 required и шесть news routes. Все маршруты должны начинаться и заканчиваться `/`, не содержать traversal, query или fragment. Дубликат любого публичного route останавливает build.
+
+`/sveden/ovz/` нельзя экспортировать как пятнадцатый обязательный подраздел. Это сохранённый адрес прежней структуры, который направляет к объединённому `/sveden/objects/`. Руководство (`/sveden/managers/`) и педагогический состав (`/sveden/employees/`) должны оставаться раздельными CMS-узлами. Изменения к приказу № 1493, внесённые приказом Рособрнадзора № 920 от 30.04.2026 (регистрация № 86689, вступление в силу 01.09.2026), должны учитываться при mapping полей объединённого подраздела материально-технического обеспечения и доступной среды.
 
 ШКИ и «Балет для всех» остаются элементами `programs` с `primary: false` и рендерятся внутри образования. Блок «Новые проекты» не добавляется.
 
@@ -136,7 +144,9 @@ Build не скачивает remote images. Значение `source: https://�
 - Published event с обязательным `href` попадает в listing `/events/` и получает отдельную HTML-страницу.
 - Employee records выводятся списком на `/sveden/employees/` (имя/title, роль/position, department и optional photo). Отдельных employee detail routes нет.
 - На `/documents/` активными ссылками становятся прошедшие publication normalization records с `href`; это включает `published` и `live`. До получения файлов остаются неподтверждённые названия без ссылок.
-- `svedenSections` задаёт обязательные названия/URL для index и route validation. Для совпавшего детального route renderer умеет вывести `body`/`content` rich text, `sections` и `documents`; при их отсутствии используется prototype page из `pages`.
+- `svedenSections` задаёт названия, URL и `group`. Все 14 `SVEDEN_REQUIRED_ROUTES` обязаны иметь `group: 'mandatory'`; `/sveden/ovz/` имеет `group: 'legacy'`. Для совпавшего детального route renderer умеет вывести `body`/`content` rich text, `sections` и `documents`; при их отсутствии используется page model из `pages`.
+- Тематическая страница без официального материала хранит `structureOnly: true`. Renderer явно сообщает, что это только структура будущего раздела; adapter не должен снимать флаг, пока не переданы и не проверены фактические сведения.
+- `site.institutionalNavigation` формирует отдельную группу «Сервисы и открытость». СОУТ находится на `/documents/sout/` как самостоятельная обязанность работодателя, а не как элемент `svedenSections` приказа № 1493.
 
 Nested `svedenSections[].documents` и article attachments проходят publication filtering, требуют `title` и безопасный root-relative/HTTPS/`mailto:`/`tel:` `href`. `svedenSections[].sections` проверяются как пары строк. Специфичные для выбранной CMS поля adapter всё равно должен преобразовать в этот allowlist до build.
 
@@ -159,9 +169,10 @@ Nested `svedenSections[].documents` и article attachments проходят publ
 2. Content types, обязательные поля и vocabulary статусов.
 3. Правила preview, scheduled publication, удаления и slug.
 4. Полный legacy URL inventory и утверждённые redirects.
-5. Структуру документов и обязательных сведений `/sveden/`.
-6. Медиареестр: оригинал, автор/источник, основание публикации, согласия, alt/caption/crops.
-7. Production canonical, DNS и владельца индексации.
-8. Ответственных за фактическую, юридическую и accessibility-проверку.
+5. Структуру документов и обязательных сведений `/sveden/`: 14 mandatory items, legacy `/sveden/ovz/` и mapping полей `/sveden/objects/` по действующей редакции приказа № 1493.
+6. Перечень институциональных страниц с отдельным основанием публикации, владельцем и сроком обновления; для СОУТ — утверждённые отчёты и даты.
+7. Медиареестр: оригинал, автор/источник, основание публикации, согласия, alt/caption/crops.
+8. Production canonical, DNS и владельца индексации.
+9. Ответственных за фактическую, юридическую и accessibility-проверку.
 
 Интеграция не считается завершённой только потому, что CMS API или build вернул `200`: нужен контентный diff, route/asset validation и приёмка реального deployment.

@@ -52,7 +52,10 @@ Validator и renderer требуют полноценную global model:
 | `locale`, `legalName`, `themeColor`, `utilityLabel` | non-empty string |
 | `baseUrl` | HTTPS URL; HTTP допустим только для localhost |
 | `assets.logo` | `{src, width, height, alt}`; first-party URL и positive intrinsic dimensions |
-| `navigation`, `utilityNavigation`, `quickLinks`, `sideNavigation`, `footerNavigation`, `legalNavigation` | обязательные arrays из `NavItem` |
+| `navigation` | обязательный array из `NavItem`; поддерживает один уровень `children` для серверно отрендеренного иерархического меню |
+| `utilityNavigation`, `quickLinks`, `sideNavigation`, `footerNavigation`, `legalNavigation` | обязательные плоские arrays из `NavItem` |
+| `institutionalNavigation` | обязательный плоский `NavItem[]` для страниц «Сервисы и открытость», не являющихся автоматически подразделами приказа № 1493 |
+| `officialNavigation` | обязательный плоский `NavItem[]` для проверенных внешних официальных ссылок |
 | `contacts` | object: `city`, non-empty string `addresses[]`, `phone`, `phoneHref`, `email`, `emailHref` |
 | `footer` | object с non-empty `status`, `disclaimer` |
 | `home` | обязательные structured sections главной |
@@ -64,11 +67,25 @@ Validator и renderer требуют полноценную global model:
 
 `SITE_URL` при build переопределяет `site.baseUrl` и удаляет завершающий `/`.
 
-`NavItem`:
+Плоский `NavItem`:
 
 ```json
 { "href": "/education/", "label": "Образование", "cta": false }
 ```
+
+Группа верхнего уровня может не иметь собственного `href`, если содержит непустой `children`. Поддерживается только один уровень вложенности:
+
+```json
+{
+  "label": "Образование",
+  "children": [
+    { "href": "/education/", "label": "Программы", "group": "Программы" },
+    { "href": "/creative-industries/", "label": "Школа креативных индустрий", "group": "Программы" }
+  ]
+}
+```
+
+`label` обязателен; `href` должен быть безопасной ссылкой, `group` — непустой строкой, `cta` — boolean. Дочерний `children` у дочернего item отклоняется. Каждая внутренняя navigation-ссылка обязана указывать на реально существующий публичный route.
 
 `GalleryItem.image`, `home.hero.image` и `home.about.image` дополнительно проверяются по общей media registry.
 
@@ -88,7 +105,9 @@ Validator и renderer требуют полноценную global model:
 }
 ```
 
-Validation требует безопасный уникальный route, `title` и `description`. Renderer понимает `kicker`, optional `image` media ID, `sections`, `gallery`, `documents`, `sveden`, `seoTitle` и специальные страницы `/education/`, `/news/`.
+Validation требует безопасный уникальный route, `title` и `description`. Renderer понимает `kicker`, optional `image` media ID, `sections`, `gallery`, `documents`, `sveden`, `seoTitle`, boolean `structureOnly`, boolean `siteMap` и специальные страницы `/education/`, `/news/`.
+
+`structureOnly: true` означает, что утверждённое фактическое содержание не передано. Renderer в этом случае показывает явное предупреждение и не подменяет данные вымышленными документами, ссылками, ФИО или датами. `siteMap: true` включает серверно отрендеренную иерархию `site.navigation`; сейчас этот флаг используется на `/sitemap/`.
 
 `pages['/documents/'].documents` в локальном наборе — только ожидаемые названия. Это не records и не активные ссылки. `/privacy/` и `/consent/` — неутверждённые рабочие шаблоны.
 
@@ -177,11 +196,14 @@ Validator принимает unique `id`, `title` или `name`, optional ISO `p
 {
   "slug": "common",
   "href": "/sveden/common/",
-  "title": "Основные сведения"
+  "title": "Основные сведения",
+  "group": "mandatory"
 }
 ```
 
-Обязательны unique `slug`, safe unique `href`, `title`. Набор должен содержать все 14 route из `SVEDEN_REQUIRED_ROUTES`; дополнительные записи допустимы. Для совпавшего детального route renderer использует optional `body`/`content` rich text, `sections` в формате page card grid и `documents`; если они пусты, отображается prototype content из `pages`.
+Обязательны unique `slug`, safe unique `href`, `title` и `group`. Допустимы только `group: 'mandatory'` и `group: 'legacy'`. Набор должен содержать все 14 route из `SVEDEN_REQUIRED_ROUTES`, причём каждый из них обязан иметь `group: 'mandatory'`; дополнительные записи допустимы. Локально пятнадцатая запись `/sveden/ovz/` имеет `group: 'legacy'` и сохраняет прежний адрес, направляя к объединённому `/sveden/objects/`. Она не считается пятнадцатым обязательным подразделом.
+
+Для совпавшего детального route renderer использует optional `body`/`content` rich text, `sections` в формате page card grid и `documents`; если они пусты, отображается page model из `pages`. Все 15 текущих маршрутов имеют server-rendered HTML, но страницы без официальных материалов помечены `structureOnly: true`.
 
 Nested `documents` проверяются как records с обязательными `title` и безопасным `href`; draft/unpublished элементы фильтруются normalizer. Optional `sections` проверяются как пары `[title, description]`, а `body`/`content` проходят allowlist rich-text renderer с экранированием. Дополнительные поля конкретной CMS всё равно следует проверять в её доверенном adapter.
 
@@ -240,6 +262,8 @@ Optional `mobile` повторяет rendition fields и имеет собств
 
 ## Public route contract
 
-`REQUIRED_ROUTES` — обязательное подмножество, а не полная allowlist. Итоговые routes: `/`, `Object.keys(pages)`, `newsItems[].href`, `events[].href`. Поэтому route count динамический. Missing required route, duplicate route или unsafe route — build error.
+`REQUIRED_ROUTES` — обязательное подмножество, а не полная allowlist. Оно объединяет 16 `CORE_REQUIRED_ROUTES`, 14 юридически обязательных `SVEDEN_REQUIRED_ROUTES` и 37 сохранённых `PRESERVED_INFORMATION_ROUTES`. Последняя группа содержит legacy `/sveden/ovz/`, институциональные и тематические адреса, нужные для передачи текущей информационной архитектуры; она не означает, что все эти страницы являются подразделами приказа № 1493.
 
-Точный список обязательных paths находится в `src/content/required-routes.mjs`; все 14 `/sveden/*` нельзя удалять при CMS mapping.
+Итоговые routes: `/`, `Object.keys(pages)`, `newsItems[].href`, `events[].href`. В текущем local bundle это 73 HTML-маршрута: 67 из `REQUIRED_ROUTES` и шесть news routes. При подключении CMS route count остаётся динамическим. Missing required route, duplicate route или unsafe route — build error.
+
+Точный список находится в `src/content/required-routes.mjs`. При CMS mapping нельзя удалять ни один из 14 `SVEDEN_REQUIRED_ROUTES`; `/sveden/ovz/` сохраняется отдельно как legacy-совместимость, а институциональные страницы не должны ошибочно маркироваться обязательными подразделами специального раздела.

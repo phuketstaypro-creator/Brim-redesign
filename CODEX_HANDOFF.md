@@ -1,5 +1,21 @@
 # БРХК — полный handoff для Codex
 
+## 0.1. Актуальный статус после технической миграции — 1 сентября 2026 года
+
+Этот блок имеет приоритет над историческим описанием исходного прототипа ниже. Разделы 2–4 сохраняют контекст первоначального аудита, но больше не описывают текущую архитектуру буквально.
+
+- Runtime-loader и загрузка исходников с `raw.githubusercontent.com` устранены прямой статической сборкой.
+- Vanilla Node SSG формирует `dist/` с отдельным наполненным HTML для 73 текущих публичных маршрутов, настоящим `404`, sitemap, RSS, search index и fingerprinted assets.
+- Клиентский JavaScript используется только для progressive enhancement меню, поиска и настроек отображения; основной контент и иерархическая навигация доступны без JavaScript.
+- Проект остаётся CMS-независимым: адаптеры `local` и `json`, contract validation и документация находятся в `src/content/` и `docs/`.
+- Верхнее меню стало серверно отрендеренной иерархией `<details>/<summary>`; `/sitemap/` формируется из того же navigation contract.
+- В `/sveden/` разделены 14 обязательных подразделов и группа дополнительных институциональных страниц. `/sveden/managers/` и `/sveden/employees/` раздельны; доступная среда объединена с материально-техническим обеспечением в `/sveden/objects/` с учётом приказа Рособрнадзора № 920, действующего с 01.09.2026. `/sveden/ovz/` сохранён только как legacy-адрес.
+- Страницы, для которых не переданы официальные материалы, имеют `structureOnly: true` и не содержат выдуманных ФИО, документов, результатов или контактов.
+- Git integration Vercel у проекта `brim-redesign` на 01.09.2026 отсутствует (`link: null`), поэтому push сам по себе не является deployment. Используется проверяемый source deployment в существующий project ID с последующей проверкой READY/alias/HTTP/screenshots.
+- Индексация остаётся закрытой до подтверждения canonical, обязательного контента и прав на все media.
+
+Актуальные контракты и release gates: `README.md`, `docs/CONTENT-SCHEMA.md`, `docs/CMS-INTEGRATION.md`, `docs/LEGAL-INTEGRATION.md`, `docs/ROUTE-MAP.csv`, `docs/DEPLOYMENT.md`.
+
 ## 0. Роль агента
 
 Ты продолжаешь разработку редизайна официального сайта Бурятского республиканского хореографического колледжа имени Л. П. Сахьяновой и П. Т. Абашеева.
@@ -247,15 +263,21 @@ assets/images/studio-tutu.webp
 /sveden/document/
 /sveden/education/
 /sveden/eduStandarts/
+/sveden/managers/
 /sveden/employees/
 /sveden/objects/
 /sveden/grants/
 /sveden/paid_edu/
 /sveden/budget/
 /sveden/vacant/
-/sveden/ovz/
 /sveden/catering/
 /sveden/inter/
+```
+
+Сохранённый legacy-адрес, не являющийся отдельным обязательным подразделом в актуальном контракте:
+
+```text
+/sveden/ovz/
 ```
 
 Демонстрационные статьи:
@@ -684,7 +706,13 @@ education-390.png
 education-1440.png
 sveden-390.png
 sveden-1440.png
+sveden-managers-390.png
+sveden-managers-1440.png
+sitemap-390.png
+sitemap-1440.png
 menu-open-390.png
+menu-sveden-open-390.png
+nav-sveden-open-1440.png
 accessibility-open-390.png
 ```
 

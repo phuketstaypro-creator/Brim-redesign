@@ -201,7 +201,7 @@ curl https://<deployment>/content-manifest.json
 - media URL имеют `/assets/media/…<hash>…` и совпадают с manifest;
 - нет `raw.githubusercontent.com`, внешнего image hotlink, console errors или broken images;
 - `content-manifest.json` counts соответствуют CMS export;
-- screenshots 390 и 1440 для home/news/education/sveden плюс menu/accessibility states;
+- screenshots 390 и 1440 для home/news/education/sveden, `/sveden/managers/` и `/sitemap/`, плюс открытые mobile/desktop navigation и accessibility states;
 - редакционная сетка проверена с portrait, landscape, square и no-media карточкой.
 
 ## Git, promotion и rollback

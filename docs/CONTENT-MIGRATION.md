@@ -14,20 +14,21 @@ Frontend и build-time integration boundary реализованы, полная
 - подтверждённый основной canonical domain;
 - финальные разрешения и согласия по медиаматериалам.
 
-Локальная сборка сейчас содержит обязательные frontend routes и шесть `source-linked` news routes. Точное число генерируется из данных и не является контрактом: CMS может добавлять опубликованные news/event pages, но не может удалить `REQUIRED_ROUTES`.
+Локальная сборка сейчас содержит 73 публичных HTML-маршрута: 67 адресов из `REQUIRED_ROUTES` и шесть `source-linked` news routes. Число 73 описывает текущий snapshot, а не предел: CMS может добавлять опубликованные news/event pages, но не может удалить `REQUIRED_ROUTES`.
 
 ## Матрица текущих данных
 
 | Тип | Что есть | Что отсутствует / ограничение |
 |---|---|---|
 | Site/global | Навигация, контакты, layout и главная | Проверка всех фактов и production canonical |
-| Page | Основные pages и 14 `/sveden/*` routes | Полные утверждённые материалы/provenance |
+| Page | Основные pages; 14 обязательных `/sveden/*`; legacy `/sveden/ovz/`; сохранённые тематические и институциональные routes | Полные утверждённые материалы/provenance; `structureOnly` pages пока содержат только честное предупреждение |
 | Program | 2 основные + ШКИ и «Балет для всех» как дополнительные | Полные характеристики, сроки, квалификации, лицензии |
 | News | 6 source-linked карточек/routes | Body, author, gallery, attachments; у 4 нет точного permalink |
 | Event | Пустая `events` collection; готовы listing и detail renderer | Проверенные records |
 | Employee | Пустая `employees` collection; готов список на `/sveden/employees/` | Проверенные fields/records, решение по detail routes |
 | Document | Пустая structured `documents` collection; ожидаемые названия на page | Файлы, ссылки, реквизиты, даты, размеры, a11y status |
-| `/sveden/` | Required route structure и renderer для body/sections/documents | Фактические поля, документы, даты актуализации |
+| `/sveden/` | 14 mandatory items; отдельный legacy `/sveden/ovz/`; renderer для body/sections/documents | Фактические поля, документы, даты актуализации; mapping объединённого `/sveden/objects/` по действующей редакции приказа № 1493 |
+| Институциональные страницы | Отдельная группа «Сервисы и открытость», включая СОУТ | Основание публикации, владелец, официальное содержание и собственный срок обновления для каждого раздела |
 | Media | Official logo; восстановленное studio image; WebP derivatives из client-provided Yandex preview | Финальные права/согласия; photographer metadata; originals в исходном качестве |
 | Legal | Маршруты и рабочие шаблоны | Утверждённые локальные акты |
 
@@ -82,8 +83,13 @@ Raw snapshot хранить read-only в защищённом migration storage.
 - нормализовать routes и ISO dates детерминированно;
 - сохранять `null` для неизвестного optional value;
 - преобразовывать rich text только в разрешённые blocks;
+- сохранять `structureOnly: true`, пока для страницы не получены и не приняты официальные сведения;
 - оставлять ШКИ и «Балет для всех» внутри `programs` с `primary: false`;
 - сохранять все routes из `src/content/required-routes.mjs`;
+- передавать `group: 'mandatory'` для всех 14 `SVEDEN_REQUIRED_ROUTES` и `group: 'legacy'` для `/sveden/ovz/`;
+- не создавать отдельную обязательную копию доступной среды на `/sveden/ovz/`: фактические сведения относятся к объединённому `/sveden/objects/`;
+- разделять руководство `/sveden/managers/` и педагогический состав `/sveden/employees/`;
+- учитывать приказ Рособрнадзора № 920 от 30.04.2026, зарегистрированный под № 86689 и действующий с 01.09.2026, при mapping сведений и документов о материально-техническом обеспечении, доступной среде, общежитиях/интернатах и предоставлении помещений;
 - не добавлять блок «Новые проекты».
 
 Normalizer фильтрует drafts, а validator агрегирует ошибки duplicate IDs/routes, unsafe paths, dates, missing required routes и unknown media IDs. Ошибку validation нельзя обходить ослаблением required routes ради импорта.
@@ -138,6 +144,8 @@ client-provided-pending-final-rights-check
 - text layer, tags, reading order, language и need for HTML alternative;
 - владельца проверки и персональные данные в metadata.
 
+СОУТ переносится на `/documents/sout/` как отдельная обязанность работодателя, а не как подраздел приказа № 1493. Для отчёта СОУТ фиксируются дата утверждения, дата публикации и состав публикуемых сводных данных/мероприятий. Для обязательных сведений `/sveden/*` отдельно фиксируются дата фактического изменения и дата публикации, чтобы контролировать обновление не позднее десяти рабочих дней после изменения.
+
 Прошедший publication normalization record со статусом `published` или `live` и настоящим `href` становится активной ссылкой текущего renderer. Название без файла не превращать в фиктивный PDF URL.
 
 ## 6. Проверять партиями
@@ -155,6 +163,7 @@ npm run test:visual
 
 - counts всех collections;
 - список routes и required subset;
+- разбиение required subset на 14 mandatory `/sveden/*`, legacy `/sveden/ovz/` и остальные сохранённые институциональные/тематические routes;
 - first/last publication dates;
 - dropped drafts и причину каждого исключения;
 - media ID/provenance/originalName/rightsStatus; точный source сверяется по внешнему migration register, потому что публичный manifest его не раскрывает;
