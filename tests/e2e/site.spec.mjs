@@ -130,6 +130,39 @@ test('useful resources and college social links stay responsive and server-rende
   await expect(footer.getByRole('link', { name: 'БРХК в MAX' })).toHaveAttribute('href', 'https://max.ru/id323070083_gos');
 });
 
+test('useful resources heading and description never overlap', async ({ page }) => {
+  for (const width of [390, 860, 861, 1080, 1081, 1180, 1181, 1440]) {
+    await page.setViewportSize({ width, height: 1000 });
+    const response = await page.goto('/', { waitUntil: 'domcontentloaded' });
+    expect(response?.status()).toBe(200);
+
+    const geometry = await page.locator('.useful-links-head').evaluate((head) => {
+      const heading = head.querySelector('h2');
+      const description = head.querySelector('p');
+      const textBounds = (element) => {
+        const range = document.createRange();
+        range.selectNodeContents(element);
+        const { top, right, bottom, left } = range.getBoundingClientRect();
+        return { top, right, bottom, left };
+      };
+
+      return {
+        columns: getComputedStyle(head).gridTemplateColumns.split(/\s+/).filter(Boolean).length,
+        headingOverflow: heading.scrollWidth - heading.clientWidth,
+        heading: textBounds(heading),
+        description: textBounds(description)
+      };
+    });
+
+    expect(geometry.headingOverflow, `${width}: heading text overflow`).toBeLessThanOrEqual(1);
+    if (geometry.columns === 1) {
+      expect(geometry.heading.bottom, `${width}: stacked text collision`).toBeLessThanOrEqual(geometry.description.top);
+    } else {
+      expect(geometry.heading.right + 20, `${width}: column text collision`).toBeLessThanOrEqual(geometry.description.left);
+    }
+  }
+});
+
 test('every referenced image URL is first-party, decodable and never HTML', async ({ page, request }) => {
   const assetUrls = new Set();
   for (const route of publicRoutes) {
