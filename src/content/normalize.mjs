@@ -135,6 +135,11 @@ export function normalizeContent(input, options = {}) {
   const empty = createEmptyContentBundle();
   const site = isPlainObject(source.site) ? clone(source.site) : empty.site;
 
+  // Additive global-link fields stay optional for schema 1.0 CMS exports.
+  // Explicit invalid values still reach validation instead of being hidden.
+  if (site.usefulLinks === undefined) site.usefulLinks = [];
+  if (site.socialLinks === undefined) site.socialLinks = [];
+
   if (typeof options.siteUrl === 'string' && options.siteUrl.trim()) {
     site.baseUrl = options.siteUrl.trim().replace(/\/+$/, '');
   }

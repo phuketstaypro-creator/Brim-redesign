@@ -54,6 +54,7 @@ Validator и renderer требуют полноценную global model:
 | `assets.logo` | `{src, width, height, alt}`; first-party URL и positive intrinsic dimensions |
 | `navigation` | обязательный array из `NavItem`; поддерживает один уровень `children` для серверно отрендеренного иерархического меню |
 | `utilityNavigation`, `quickLinks`, `sideNavigation`, `footerNavigation`, `legalNavigation` | обязательные плоские arrays из `NavItem` |
+| `usefulLinks`, `socialLinks` | плоские `NavItem[]` только с HTTPS URL; ради совместимости со схемой `1.0.0` отсутствующее поле нормализуется в `[]`; `usefulLinks` формирует карточки перед футером, `socialLinks` — ссылки колледжа в футере |
 | `institutionalNavigation` | обязательный плоский `NavItem[]` для страниц «Сервисы и открытость», не являющихся автоматически подразделами приказа № 1493 |
 | `officialNavigation` | обязательный плоский `NavItem[]` для проверенных внешних официальных ссылок |
 | `contacts` | object: `city`, non-empty string `addresses[]`, `phone`, `phoneHref`, `email`, `emailHref` |

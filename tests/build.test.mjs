@@ -175,10 +175,34 @@ test('hierarchical navigation and service pages are present in server HTML', () 
   }
 });
 
-test('footer exposes the official federal education resources', () => {
+test('global useful resources and footer social links are server-rendered', () => {
   const html = readRoute('/');
+  const usefulStart = html.indexOf('<section class="useful-links"');
+  const quickStart = html.indexOf('<section class="quick-links"');
+  const footerStart = html.indexOf('<footer class="site-footer"');
+  assert.ok(usefulStart >= 0, 'useful links section is missing');
+  assert.ok(usefulStart < quickStart && quickStart < footerStart, 'global lower-page sections are out of order');
+
+  const usefulMarkup = html.slice(usefulStart, quickStart);
+  const usefulLinks = [
+    ['https://bus.gov.ru/qrcode/rate/231927?agencyId=232834', 'Оцените условия оказания услуг'],
+    ['https://minkultrb.ru/', 'Министерство культуры Республики Бурятия'],
+    ['https://edu.gov.ru/', 'Министерство просвещения Российской Федерации'],
+    ['https://egov-buryatia.ru/minobr/', 'Министерство образования и науки Республики Бурятия'],
+    ['https://culture.gov.ru/', 'Министерство культуры Российской Федерации']
+  ];
+  assert.equal((usefulMarkup.match(/class="useful-link-card(?:\s|"|$)/g) || []).length, usefulLinks.length);
+  for (const [href, label] of usefulLinks) {
+    assert.ok(usefulMarkup.includes(`href="${href}" rel="external"`), `${href}: useful link is missing`);
+    assert.ok(usefulMarkup.includes(`>${label}</strong>`), `${href}: useful link label is missing`);
+  }
+
+  const footerMarkup = html.slice(footerStart);
   assert.match(html, /href="https:\/\/edu\.gov\.ru\/" rel="external">Минпросвещения России<\/a>/);
   assert.match(html, /href="https:\/\/minobrnauki\.gov\.ru\/" rel="external">Минобрнауки России<\/a>/);
+  assert.match(footerMarkup, /<strong class="footer-social-title">Социальные сети<\/strong>/);
+  assert.match(footerMarkup, /href="https:\/\/vk\.ru\/uubrhk03" rel="external">БРХК во ВКонтакте<\/a>/);
+  assert.match(footerMarkup, /href="https:\/\/max\.ru\/id323070083_gos" rel="external">БРХК в MAX<\/a>/);
 });
 
 test('official logo, favicon and hashed first-party assets are emitted', () => {

@@ -79,6 +79,57 @@ test('official logo and favicon are served as images', async ({ page, request })
   }
 });
 
+test('useful resources and college social links stay responsive and server-rendered', async ({ page }) => {
+  const usefulLinks = [
+    'https://bus.gov.ru/qrcode/rate/231927?agencyId=232834',
+    'https://minkultrb.ru/',
+    'https://edu.gov.ru/',
+    'https://egov-buryatia.ru/minobr/',
+    'https://culture.gov.ru/'
+  ];
+
+  for (const { width, height, columns } of [
+    { width: 390, height: 844, columns: 1 },
+    { width: 768, height: 1000, columns: 2 },
+    { width: 1440, height: 1000, columns: 5 }
+  ]) {
+    await page.setViewportSize({ width, height });
+    const response = await page.goto('/', { waitUntil: 'domcontentloaded' });
+    expect(response?.status()).toBe(200);
+
+    const section = page.locator('.useful-links');
+    await expect(section.getByRole('heading', { level: 2, name: 'Полезные ссылки' })).toBeVisible();
+    await expect(section.locator('.useful-link-card')).toHaveCount(usefulLinks.length);
+    for (const href of usefulLinks) {
+      const link = section.locator(`a[href="${href}"]`);
+      await expect(link, `${width}: ${href}`).toHaveCount(1);
+      await expect(link).toHaveAttribute('rel', 'external');
+    }
+
+    const layout = await page.locator('.useful-links-grid').evaluate((grid) => ({
+      columns: getComputedStyle(grid).gridTemplateColumns.split(/\s+/).filter(Boolean).length,
+      documentWidth: document.documentElement.scrollWidth,
+      viewportWidth: window.innerWidth
+    }));
+    expect(layout.columns, `${width}: useful link columns`).toBe(columns);
+    expect(layout.documentWidth, `${width}: horizontal overflow`).toBeLessThanOrEqual(layout.viewportWidth);
+  }
+
+  const sectionOrder = await page.evaluate(() => {
+    const useful = document.querySelector('.useful-links');
+    const quick = document.querySelector('.quick-links');
+    const footer = document.querySelector('.site-footer');
+    return Boolean(useful && quick && footer
+      && (useful.compareDocumentPosition(quick) & Node.DOCUMENT_POSITION_FOLLOWING)
+      && (quick.compareDocumentPosition(footer) & Node.DOCUMENT_POSITION_FOLLOWING));
+  });
+  expect(sectionOrder).toBe(true);
+
+  const footer = page.locator('footer');
+  await expect(footer.getByRole('link', { name: 'БРХК во ВКонтакте' })).toHaveAttribute('href', 'https://vk.ru/uubrhk03');
+  await expect(footer.getByRole('link', { name: 'БРХК в MAX' })).toHaveAttribute('href', 'https://max.ru/id323070083_gos');
+});
+
 test('every referenced image URL is first-party, decodable and never HTML', async ({ page, request }) => {
   const assetUrls = new Set();
   for (const route of publicRoutes) {

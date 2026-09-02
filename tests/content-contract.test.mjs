@@ -46,6 +46,36 @@ test('hierarchical navigation is validated recursively', async () => {
   }
 });
 
+test('global useful and social links require safe CMS values', async () => {
+  const valid = await loadContent({ env: { CONTENT_ADAPTER: 'local' }, cwd: projectRoot });
+  assert.equal(valid.site.usefulLinks.length, 5);
+  assert.equal(valid.site.socialLinks.length, 2);
+
+  const compatible = structuredClone(await loadLocalContent());
+  delete compatible.site.usefulLinks;
+  delete compatible.site.socialLinks;
+  const normalized = await loadContent({ cwd: projectRoot, adapter: async () => compatible });
+  assert.deepEqual(normalized.site.usefulLinks, []);
+  assert.deepEqual(normalized.site.socialLinks, []);
+
+  const mutations = [
+    (raw) => { raw.site.usefulLinks[0].href = 'http://example.org/insecure'; },
+    (raw) => { raw.site.usefulLinks[0].href = '/about/'; },
+    (raw) => { raw.site.socialLinks[0].href = 'javascript:alert(1)'; },
+    (raw) => { raw.site.socialLinks[0].href = 'mailto:social@example.org'; },
+    (raw) => { raw.site.socialLinks[0].label = ''; }
+  ];
+
+  for (const mutate of mutations) {
+    const raw = structuredClone(await loadLocalContent());
+    mutate(raw);
+    await assert.rejects(
+      loadContent({ cwd: projectRoot, adapter: async () => raw }),
+      ContentContractError
+    );
+  }
+});
+
 test('mandatory disclosure classification cannot be downgraded', async () => {
   const raw = structuredClone(await loadLocalContent());
   raw.svedenSections.find((section) => section.href === '/sveden/common/').group = 'legacy';

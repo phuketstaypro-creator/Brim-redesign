@@ -148,6 +148,32 @@ export const site = {
     { href: '/students/', label: 'Студентам' },
     { href: '/sveden/', label: 'Сведения об организации' }
   ],
+  usefulLinks: [
+    {
+      href: 'https://bus.gov.ru/qrcode/rate/231927?agencyId=232834',
+      label: 'Оцените условия оказания услуг'
+    },
+    {
+      href: 'https://minkultrb.ru/',
+      label: 'Министерство культуры Республики Бурятия'
+    },
+    {
+      href: 'https://edu.gov.ru/',
+      label: 'Министерство просвещения Российской Федерации'
+    },
+    {
+      href: 'https://egov-buryatia.ru/minobr/',
+      label: 'Министерство образования и науки Республики Бурятия'
+    },
+    {
+      href: 'https://culture.gov.ru/',
+      label: 'Министерство культуры Российской Федерации'
+    }
+  ],
+  socialLinks: [
+    { href: 'https://vk.ru/uubrhk03', label: 'БРХК во ВКонтакте' },
+    { href: 'https://max.ru/id323070083_gos', label: 'БРХК в MAX' }
+  ],
   sideNavigation: [
     { href: '/about/', label: 'О колледже' },
     { href: '/education/', label: 'Образование' },

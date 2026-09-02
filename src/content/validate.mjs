@@ -153,6 +153,15 @@ function validateLinkCollection(value, field, issues, { maxDepth = 0 } = {}) {
   items.forEach((item, index) => validateItem(item, index, field, 0));
 }
 
+function validateHttpsLinkCollection(value, field, issues) {
+  if (!Array.isArray(value)) return;
+  value.forEach((item, index) => {
+    if (isPlainObject(item) && item.href !== undefined && !isHttpUrl(item.href)) {
+      issues.push(`${field}[${index}].href must be an HTTPS URL`);
+    }
+  });
+}
+
 function validateNavigationTargets(items, field, routes, issues) {
   if (!Array.isArray(items)) return;
   items.forEach((item, index) => {
@@ -220,8 +229,11 @@ function validateSite(site, issues) {
   }
 
   validateLinkCollection(site.navigation, 'site.navigation', issues, { maxDepth: 1 });
-  for (const field of ['utilityNavigation', 'quickLinks', 'sideNavigation', 'footerNavigation', 'legalNavigation', 'officialNavigation', 'institutionalNavigation']) {
+  for (const field of ['utilityNavigation', 'quickLinks', 'usefulLinks', 'socialLinks', 'sideNavigation', 'footerNavigation', 'legalNavigation', 'officialNavigation', 'institutionalNavigation']) {
     validateLinkCollection(site[field], `site.${field}`, issues);
+  }
+  for (const field of ['usefulLinks', 'socialLinks']) {
+    validateHttpsLinkCollection(site[field], `site.${field}`, issues);
   }
 
   const contacts = requiredObject(site.contacts, 'site.contacts', issues);
@@ -618,7 +630,7 @@ export function validateContent(content) {
     issues.push(`required public route is missing: ${route}`);
   }
 
-  for (const field of ['navigation', 'utilityNavigation', 'quickLinks', 'sideNavigation', 'footerNavigation', 'legalNavigation', 'officialNavigation', 'institutionalNavigation']) {
+  for (const field of ['navigation', 'utilityNavigation', 'quickLinks', 'usefulLinks', 'socialLinks', 'sideNavigation', 'footerNavigation', 'legalNavigation', 'officialNavigation', 'institutionalNavigation']) {
     validateNavigationTargets(content.site[field], `site.${field}`, seenRoutes, issues);
   }
   validateNavigationTargets(content.site.home?.hero?.actions, 'site.home.hero.actions', seenRoutes, issues);

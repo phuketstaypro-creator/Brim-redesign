@@ -99,6 +99,23 @@ function inlineLinks(items) {
   }).join('');
 }
 
+function externalHostname(href) {
+  try {
+    return new URL(href).hostname.replace(/^www\./i, '');
+  } catch {
+    return '';
+  }
+}
+
+function usefulLinkCards(items) {
+  return linkItems(items).map(({ href, label }, index) => {
+    const number = String(index + 1).padStart(2, '0');
+    const hostname = externalHostname(href);
+    const accent = index === 0 ? ' is-accent' : '';
+    return `<li><a class="useful-link-card${accent}" href="${esc(href)}" rel="external"><span class="useful-link-meta">${number}</span><strong class="useful-link-title">${esc(label)}</strong><span class="useful-link-destination"><span>${esc(hostname)}</span><span class="useful-link-arrow" aria-hidden="true">↗</span></span></a></li>`;
+  }).join('');
+}
+
 function logoImage(logo, className, alt) {
   const src = safeUrl(logo?.src);
   if (!src) return '';
@@ -141,9 +158,11 @@ export function renderLayout({ site, route, title, description, content, cssHref
   const primaryNavigation = navigation(siteData.navigation, safeRoute);
   const utilityNavigation = inlineLinks(siteData.utilityNavigation);
   const quickLinks = inlineLinks(siteData.quickLinks);
+  const usefulLinks = usefulLinkCards(siteData.usefulLinks);
   const footerNavigation = inlineLinks(siteData.footerNavigation);
   const legalNavigation = inlineLinks(siteData.legalNavigation);
   const officialNavigation = inlineLinks(siteData.officialNavigation);
+  const socialNavigation = inlineLinks(siteData.socialLinks);
   const footerStatus = asText(siteData.footer?.status);
   const footerDisclaimer = asText(siteData.footer?.disclaimer);
 
@@ -201,9 +220,11 @@ export function renderLayout({ site, route, title, description, content, cssHref
 
   ${content}
 
+  ${usefulLinks ? `<section class="useful-links" aria-labelledby="useful-links-title"><div class="wrap"><div class="useful-links-head"><div><span class="useful-links-kicker">Сервисы и ведомства</span><h2 id="useful-links-title">Полезные ссылки</h2></div><p>Государственные сервисы и ведомства в сфере образования и культуры.</p></div><ol class="useful-links-grid">${usefulLinks}</ol></div></section>` : ''}
+
   <section class="quick-links" aria-labelledby="quick-links-title"><div class="wrap quick-grid"><h2 id="quick-links-title">Быстрый доступ</h2>${quickLinks}</div></section>
 
-  <footer class="site-footer"><div class="wrap footer-grid"><div class="footer-brand"><a class="footer-logo-link" href="/" aria-label="${esc(brandAriaLabel)}">${logoImage(logo, 'footer-logo', logo.alt || '')}</a><p>${esc(siteData.legalName)}</p></div><div><strong>Навигация</strong>${footerNavigation}</div><div><strong>Контакты</strong>${contactDetails(siteData.contacts)}</div><div><strong>Правовая информация</strong>${legalNavigation}</div><div><strong>Официальные ресурсы</strong>${officialNavigation}</div></div><div class="wrap footer-bottom">${footerStatus ? `<span>${esc(footerStatus)}</span>` : ''}${footerDisclaimer ? `<span>${esc(footerDisclaimer)}</span>` : ''}</div></footer>
+  <footer class="site-footer"><div class="wrap footer-grid"><div class="footer-brand"><a class="footer-logo-link" href="/" aria-label="${esc(brandAriaLabel)}">${logoImage(logo, 'footer-logo', logo.alt || '')}</a><p>${esc(siteData.legalName)}</p></div><div><strong>Навигация</strong>${footerNavigation}</div><div><strong>Контакты</strong>${contactDetails(siteData.contacts)}</div><div><strong>Правовая информация</strong>${legalNavigation}</div><div class="footer-resources"><strong>Официальные ресурсы</strong>${officialNavigation}${socialNavigation ? `<strong class="footer-social-title">Социальные сети</strong><div class="footer-social-links">${socialNavigation}</div>` : ''}</div></div><div class="wrap footer-bottom">${footerStatus ? `<span>${esc(footerStatus)}</span>` : ''}${footerDisclaimer ? `<span>${esc(footerDisclaimer)}</span>` : ''}</div></footer>
 </body>
 </html>`;
 }
