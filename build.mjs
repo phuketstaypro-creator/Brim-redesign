@@ -46,7 +46,7 @@ function routeFile(route) {
 
 function assertStableAssets() {
   const required = [
-    'assets/images/brhk-logo.png',
+    'assets/images/brhk-monogram.png',
     'assets/icons/favicon-32.png',
     'assets/icons/apple-touch-icon.png',
     'assets/icons/icon-192.png',

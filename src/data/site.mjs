@@ -34,10 +34,10 @@ export const site = {
   utilityLabel: 'Официальный сайт образовательной организации',
   assets: {
     logo: {
-      src: '/assets/images/brhk-logo.png',
-      width: 280,
-      height: 150,
-      alt: 'Логотип Бурятского республиканского хореографического колледжа'
+      src: '/assets/images/brhk-monogram.png',
+      width: 756,
+      height: 410,
+      alt: 'Фирменный знак Бурятского республиканского хореографического колледжа'
     },
     stage: {
       src: '/assets/images/studio-tutu-landscape.webp',

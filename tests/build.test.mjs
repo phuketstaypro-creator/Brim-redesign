@@ -208,8 +208,9 @@ test('global useful resources and footer social links are server-rendered', () =
 test('official logo, favicon and hashed first-party assets are emitted', () => {
   const html = readRoute('/');
   assert.match(html, /<link\s+rel="icon"[^>]+href="\/assets\/icons\/favicon-32\.png"/i);
-  assert.match(html, /<header[\s\S]*?<img[^>]+class="brand-logo"[^>]+src="\/assets\/images\/brhk-logo\.png"/i);
-  assert.match(html, /<footer[\s\S]*?<img[^>]+class="footer-logo"[^>]+src="\/assets\/images\/brhk-logo\.png"/i);
+  assert.match(html, /<header[\s\S]*?<img[^>]+class="brand-logo"[^>]+src="\/assets\/images\/brhk-monogram\.png"[^>]+width="756"[^>]+height="410"/i);
+  assert.match(html, /<footer[\s\S]*?<img[^>]+class="footer-logo"[^>]+src="\/assets\/images\/brhk-monogram\.png"[^>]+width="756"[^>]+height="410"/i);
+  assert.doesNotMatch(html.match(/<header[\s\S]*?<\/header>/i)?.[0] || '', /brand-text/);
 
   const stylesheet = html.match(/<link\s+rel="stylesheet"\s+href="([^"]+)"/i)?.[1];
   const script = html.match(/<script\s+defer\s+src="([^"]+)"/i)?.[1];
@@ -219,7 +220,7 @@ test('official logo, favicon and hashed first-party assets are emitted', () => {
   const requiredAssets = [
     stylesheet,
     script,
-    '/assets/images/brhk-logo.png',
+    '/assets/images/brhk-monogram.png',
     '/assets/icons/favicon-32.png',
     '/manifest.webmanifest',
     '/sitemap.xml',

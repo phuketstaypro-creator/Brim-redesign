@@ -70,14 +70,16 @@ Repository provenance доказывает технический источни
 
 ## Официальный логотип и icons
 
-`public/assets/images/brhk-logo.png` — официальный логотип БРХК, технически пересохранённый из повреждённого PNG через фактически отображённые Chromium pixels без изменения размеров/визуального содержимого. Из него детерминированно подготовлены:
+`public/assets/images/brhk-monogram.png` — переданный заказчиком красный фирменный знак БРХК. Из исходного JPEG удалена только белая подложка, а изображение плотно обрезано с прозрачным технологическим полем; знак используется в header и footer без изменения пропорций.
+
+`public/assets/images/brhk-logo.png` — прежний официальный файл БРХК, технически пересохранённый из повреждённого PNG через фактически отображённые Chromium pixels без изменения размеров/визуального содержимого. Из него ранее детерминированно подготовлены:
 
 - `public/assets/icons/favicon-32.png`;
 - `public/assets/icons/apple-touch-icon.png`;
 - `public/assets/icons/icon-192.png`;
 - `public/assets/icons/icon-512.png`.
 
-Логотип используется в header, footer и favicon/manifest. Media record не содержит имени автора или отдельного лицензионного документа; статус остаётся `client-provided-pending-final-rights-check`. Перед передачей production домена колледж должен подтвердить допустимость использования знака и производных icon sizes.
+Новый знак используется в header/footer, прежний файл — в уже выпущенных favicon/manifest icons. Media record не содержит имени автора или отдельного лицензионного документа; статус остаётся `client-provided-pending-final-rights-check`. Перед передачей production домена колледж должен подтвердить допустимость использования обоих файлов и производных icon sizes.
 
 Технические SHA-256 и способ восстановления logo/studio перечислены в `public/assets/images/README.md`. Этот технический журнал не заменяет настоящий rights register.
 

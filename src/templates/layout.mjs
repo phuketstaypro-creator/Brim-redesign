@@ -152,7 +152,6 @@ export function renderLayout({ site, route, title, description, content, cssHref
   const robots = noindex || siteData.staging !== false ? 'noindex, nofollow' : 'index, follow';
   const socialImage = absoluteUrl(canonicalBase, image || siteData.socialImage || siteData.assets?.stage?.src || siteData.assets?.logo?.src);
   const logo = siteData.assets?.logo || {};
-  const brandName = asText(siteData.name);
   const brandLabel = asText(siteData.shortName || siteData.name);
   const brandAriaLabel = brandLabel ? `${brandLabel} — на главную` : 'На главную';
   const primaryNavigation = navigation(siteData.navigation, safeRoute);
@@ -216,7 +215,7 @@ export function renderLayout({ site, route, title, description, content, cssHref
 
   <div class="utility"><div class="wrap utility-inner"><span class="utility-label">${esc(siteData.utilityLabel)}</span><div class="utility-actions"><button type="button" data-search-open>Поиск</button><button type="button" data-access-open>Версия для слабовидящих</button>${utilityNavigation}</div></div></div>
 
-  <header class="site-header"><div class="wrap header-inner"><a class="brand" href="/" aria-label="${esc(brandAriaLabel)}"><span class="brand-logo-wrap" aria-hidden="true">${logoImage(logo, 'brand-logo', '')}</span><span class="brand-text">${esc(brandName)}</span></a><nav class="primary-nav" id="primary-nav" aria-label="Основная навигация"><ul class="primary-nav-list" data-nav-list>${primaryNavigation}</ul></nav><button class="menu-button" id="menu-button" type="button" aria-controls="primary-nav" aria-expanded="false">Меню</button></div></header>
+  <header class="site-header"><div class="wrap header-inner"><a class="brand" href="/" aria-label="${esc(brandAriaLabel)}"><span class="brand-logo-wrap" aria-hidden="true">${logoImage(logo, 'brand-logo', '')}</span></a><nav class="primary-nav" id="primary-nav" aria-label="Основная навигация"><ul class="primary-nav-list" data-nav-list>${primaryNavigation}</ul></nav><button class="menu-button" id="menu-button" type="button" aria-controls="primary-nav" aria-expanded="false">Меню</button></div></header>
 
   ${content}
 

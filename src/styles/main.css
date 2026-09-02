@@ -36,9 +36,8 @@ img{max-width:100%;display:block}
 
 .site-header{position:sticky;top:0;z-index:90;background:rgba(21,16,15,.96);color:#fff;border-bottom:1px solid rgba(255,255,255,.13);backdrop-filter:blur(14px)}
 .header-inner{position:relative;min-height:84px;display:flex;align-items:center;gap:25px}
-.brand{display:flex;align-items:center;gap:13px;text-decoration:none;min-width:330px}
+.brand{display:flex;align-items:center;text-decoration:none}
 .brand-mark{width:48px;height:48px;border:1px solid rgba(255,255,255,.65);border-radius:50%;display:grid;place-items:center;font:1.55rem var(--serif);flex:0 0 auto}
-.brand-text{text-transform:uppercase;letter-spacing:.105em;font-size:.68rem;line-height:1.35}
 .primary-nav{align-self:stretch;display:flex;align-items:center;margin-left:auto}
 .primary-nav ul{list-style:none;margin:0;padding:0}
 .primary-nav>.primary-nav-list{display:flex;align-items:stretch;gap:15px}
@@ -323,7 +322,6 @@ html[data-size=xlarge] .useful-links-grid{grid-template-columns:repeat(3,minmax(
 @media(max-width:1180px){
   .primary-nav>.primary-nav-list{gap:10px}
   .nav-item>a,.nav-disclosure>summary{font-size:.66rem}
-  .brand{min-width:285px}
   .card-grid{grid-template-columns:1fr 1fr}
   .useful-links-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
   .quick-grid{grid-template-columns:1fr 1fr}
@@ -366,7 +364,6 @@ html[data-size=xlarge] .useful-links-grid{grid-template-columns:repeat(3,minmax(
   .header-inner{min-height:78px;gap:12px}
   .brand{min-width:0;flex:1}
   .brand-mark{width:43px;height:43px}
-  .brand-text{font-size:.58rem;letter-spacing:.07em}
   html.nav-enhanced .primary-nav{padding-inline:15px}
   .hero,.hero-inner{min-height:720px}
   .hero-inner{display:grid;grid-template-columns:1fr;align-content:end;gap:30px;padding:70px 0 40px}
@@ -428,7 +425,6 @@ html[data-size=xlarge] .useful-links-grid{grid-template-columns:repeat(3,minmax(
 
 @media(max-width:430px){
   .wrap{width:calc(100% - 24px)}
-  .brand-text{font-size:.52rem}
   .menu-button{padding:9px 12px}
   .hero h1{font-size:clamp(3rem,15vw,4rem)}
   .button-row{grid-template-columns:1fr}
@@ -454,32 +450,26 @@ html[data-size=xlarge] .useful-links-grid{grid-template-columns:repeat(3,minmax(
   .useful-link-card:hover{transform:none}
 }
 
-/* Official BRHK identity asset. Keep the supplied proportions intact. */
-.brand{min-width:370px;gap:14px}
-.brand-logo-wrap{display:flex;align-items:center;justify-content:center;width:104px;flex:0 0 104px;overflow:visible}
-.brand-logo{display:block;width:104px;height:auto;max-width:none}
+/* Client-supplied BRHK identity asset. Keep its intrinsic proportions intact. */
+.brand{flex:0 0 auto;min-width:0;min-height:44px}
+.brand-logo-wrap{position:relative;display:flex;align-items:center;justify-content:center;width:128px;flex:0 0 128px;overflow:visible}
+.brand-logo{display:block;width:100%;height:auto;max-width:none;object-fit:contain}
 .footer-logo-link{display:inline-flex;align-items:center;max-width:100%;margin:0 0 18px;text-decoration:none}
-.footer-logo{display:block;width:min(240px,100%);height:auto}
+.footer-logo{display:block;width:min(250px,100%);height:auto;object-fit:contain}
 .footer-brand p{max-width:520px}
+html[data-images=off] .brand-logo-wrap::after{content:'БРХК';position:absolute;inset:0;display:grid;place-items:center;font:2rem/1 var(--serif);color:#eee5dd}
 html[data-images=off] .footer-logo-link::after{content:'БРХК';display:block;font:3.8rem/1 var(--serif);color:#eee5dd}
 
-@media(max-width:1100px){
-  .brand{min-width:310px}
-  .brand-logo-wrap{width:86px;flex-basis:86px}
-  .brand-logo{width:86px}
+@media(max-width:1180px){
+  .brand-logo-wrap{width:112px;flex-basis:112px}
 }
 
-@media(max-width:860px){
-  .brand{min-width:0;gap:8px}
-  .brand-logo-wrap{width:70px;flex-basis:70px}
-  .brand-logo{width:70px}
-  .brand-text{font-size:.54rem;letter-spacing:.06em;line-height:1.28}
-  .footer-logo{width:190px}
+@media(max-width:1080px){
+  .brand-logo-wrap{width:104px;flex-basis:104px}
+  .footer-logo{width:210px}
 }
 
 @media(max-width:430px){
-  .brand-logo-wrap{width:60px;flex-basis:60px}
-  .brand-logo{width:60px}
-  .brand-text{font-size:.47rem;letter-spacing:.045em}
-  .footer-logo{width:165px}
+  .brand-logo-wrap{width:88px;flex-basis:88px}
+  .footer-logo{width:180px}
 }

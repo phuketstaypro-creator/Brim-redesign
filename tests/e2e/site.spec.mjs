@@ -65,18 +65,59 @@ test('official logo and favicon are served as images', async ({ page, request })
   await page.goto('/');
   await expect(page.locator('header img.brand-logo')).toHaveCount(1);
   await expect(page.locator('footer img.footer-logo')).toHaveCount(1);
+  await expect(page.locator('header .brand-text')).toHaveCount(0);
+  await expect(page.locator('header a.brand')).toHaveAccessibleName('БРХК — на главную');
   await expect(page.locator('link[rel="icon"]')).toHaveAttribute('href', '/assets/icons/favicon-32.png');
 
   for (const locator of [page.locator('header img.brand-logo'), page.locator('footer img.footer-logo')]) {
     await expect.poll(() => locator.evaluate((image) => image.complete && image.naturalWidth > 0)).toBe(true);
   }
 
-  for (const asset of ['/assets/images/brhk-logo.png', '/assets/icons/favicon-32.png']) {
+  for (const asset of ['/assets/images/brhk-monogram.png', '/assets/icons/favicon-32.png']) {
     const response = await request.get(asset);
     expect(response.status(), asset).toBe(200);
     expect(response.headers()['content-type'], asset).toMatch(/^image\//);
     expect((await response.body()).byteLength, asset).toBeGreaterThan(100);
   }
+});
+
+test('header monogram keeps its proportions and stays inside the layout', async ({ page }) => {
+  for (const width of [320, 390, 430, 431, 768, 860, 861, 1080, 1081, 1180, 1181, 1440]) {
+    await page.setViewportSize({ width, height: 900 });
+    const response = await page.goto('/', { waitUntil: 'domcontentloaded' });
+    expect(response?.status()).toBe(200);
+
+    const layout = await page.locator('header a.brand').evaluate((brand) => {
+      const logo = brand.querySelector('img.brand-logo');
+      const header = brand.closest('.site-header');
+      const logoRect = logo.getBoundingClientRect();
+      const brandRect = brand.getBoundingClientRect();
+      const headerRect = header.getBoundingClientRect();
+      return {
+        naturalWidth: logo.naturalWidth,
+        naturalHeight: logo.naturalHeight,
+        renderedRatio: logoRect.width / logoRect.height,
+        intrinsicRatio: logo.naturalWidth / logo.naturalHeight,
+        insideBrand: logoRect.left >= brandRect.left - 1 && logoRect.right <= brandRect.right + 1,
+        insideHeader: logoRect.top >= headerRect.top - 1 && logoRect.bottom <= headerRect.bottom + 1,
+        documentWidth: document.documentElement.scrollWidth,
+        viewportWidth: window.innerWidth
+      };
+    });
+
+    expect(layout.naturalWidth, `${width}: intrinsic width`).toBe(756);
+    expect(layout.naturalHeight, `${width}: intrinsic height`).toBe(410);
+    expect(Math.abs(layout.renderedRatio - layout.intrinsicRatio), `${width}: distorted logo`).toBeLessThan(0.01);
+    expect(layout.insideBrand, `${width}: logo escaped brand`).toBe(true);
+    expect(layout.insideHeader, `${width}: logo escaped header`).toBe(true);
+    expect(layout.documentWidth, `${width}: horizontal overflow`).toBeLessThanOrEqual(layout.viewportWidth);
+  }
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/', { waitUntil: 'domcontentloaded' });
+  await page.locator('html').evaluate((root) => { root.dataset.images = 'off'; });
+  const fallback = await page.locator('.brand-logo-wrap').evaluate((element) => getComputedStyle(element, '::after').content);
+  expect(fallback).toBe('"БРХК"');
 });
 
 test('useful resources and college social links stay responsive and server-rendered', async ({ page }) => {
