@@ -7,9 +7,11 @@ mkdirSync(output, { recursive: true });
 
 const matrix = [
   { name: 'home-390', route: '/', width: 390, height: 844 },
+  { name: 'home-768', route: '/', width: 768, height: 1000 },
   { name: 'home-1440', route: '/', width: 1440, height: 1000 },
   { name: 'news-320', route: '/news/', width: 320, height: 760 },
   { name: 'news-390', route: '/news/', width: 390, height: 844 },
+  { name: 'news-768', route: '/news/', width: 768, height: 1000 },
   { name: 'news-1440', route: '/news/', width: 1440, height: 1000 },
   { name: 'education-390', route: '/education/', width: 390, height: 844 },
   { name: 'education-1440', route: '/education/', width: 1440, height: 1000 },

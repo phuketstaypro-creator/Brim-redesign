@@ -113,54 +113,136 @@ test('every referenced image URL is first-party, decodable and never HTML', asyn
   }
 });
 
-test('news remains a two-column mixed editorial grid at 390px', async ({ page }, testInfo) => {
-  await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto('/news/', { waitUntil: 'networkidle' });
+test('news masonry packs natural-height cards without blank bands at every target width', async ({ page }, testInfo) => {
+  test.setTimeout(60_000);
+  const targets = [
+    { route: '/', name: 'home', count: 5 },
+    { route: '/news/', name: 'archive', count: 6 }
+  ];
+  const widths = [320, 390, 768, 1440];
+  const sourceOrders = new Map();
 
-  const metrics = await page.locator('.editorial-news').evaluate((grid) => {
-    const cards = [...grid.querySelectorAll('.editorial-card')];
-    const narrowCards = cards.filter((card) => !card.classList.contains('is-wide') && !card.classList.contains('is-featured'));
-    const rect = (element) => {
-      const box = element.getBoundingClientRect();
-      return {
-        x: Math.round(box.x),
-        width: Math.round(box.width),
-        height: Math.round(box.height),
-        right: Math.round(box.right)
-      };
-    };
-    return {
-      columns: getComputedStyle(grid).gridTemplateColumns.split(/\s+/).filter(Boolean),
-      classes: cards.map((card) => card.className),
-      firstTwo: cards.slice(0, 2).map(rect),
-      narrow: narrowCards.map(rect),
-      cards: cards.map(rect),
-      viewportWidth: window.innerWidth,
-      documentWidth: document.documentElement.scrollWidth,
-      gridScrollWidth: grid.scrollWidth,
-      gridClientWidth: grid.clientWidth
-    };
-  });
+  for (const target of targets) {
+    for (const width of widths) {
+      await page.setViewportSize({ width, height: width < 600 ? 844 : 1000 });
+      await page.goto(target.route, { waitUntil: 'networkidle' });
+      const grid = page.locator('.editorial-news');
+      await grid.scrollIntoViewIfNeeded();
+      await expect(grid).toHaveAttribute('data-masonry', 'ready');
 
-  expect(metrics.columns).toHaveLength(2);
-  expect(new Set(metrics.firstTwo.map((card) => card.x)).size).toBe(2);
-  expect(metrics.firstTwo.every((card) => card.width < 200)).toBe(true);
-  expect(metrics.classes.some((value) => value.includes('is-portrait'))).toBe(true);
-  expect(metrics.classes.some((value) => value.includes('is-landscape'))).toBe(true);
-  expect(metrics.classes.some((value) => value.includes('is-square'))).toBe(true);
-  expect(new Set(metrics.narrow.map((card) => card.x)).size).toBeGreaterThanOrEqual(2);
-  expect(new Set(metrics.cards.map((card) => card.height)).size).toBeGreaterThanOrEqual(3);
-  expect(metrics.narrow.every((card) => card.width < 200)).toBe(true);
-  expect(metrics.cards.every((card) => card.right <= metrics.viewportWidth + 1)).toBe(true);
-  expect(metrics.documentWidth).toBeLessThanOrEqual(metrics.viewportWidth);
-  expect(metrics.gridScrollWidth).toBeLessThanOrEqual(metrics.gridClientWidth);
+      const images = grid.locator('.editorial-media img');
+      await expect.poll(() => images.evaluateAll((items) => items.every((image) => image.complete && image.naturalWidth > 0))).toBe(true);
+      await expect(grid).toHaveAttribute('data-masonry', 'ready');
 
-  const realMediaIds = await page.locator('.editorial-media img').evaluateAll((images) => images.map((image) => image.dataset.mediaId));
+      const metrics = await grid.evaluate((element) => {
+        const gridBox = element.getBoundingClientRect();
+        const gap = Number.parseFloat(getComputedStyle(element).columnGap) || 0;
+        const cards = [...element.querySelectorAll(':scope > .editorial-card')].map((card) => {
+          const cardBox = card.getBoundingClientRect();
+          const linkBox = card.querySelector(':scope > a').getBoundingClientRect();
+          const mediaBox = card.querySelector('.editorial-media').getBoundingClientRect();
+          const copy = card.querySelector('.editorial-copy');
+          const copyBox = copy.getBoundingClientRect();
+          return {
+            href: card.querySelector(':scope > a').getAttribute('href'),
+            className: card.className,
+            x: cardBox.x - gridBox.x,
+            y: cardBox.y - gridBox.y,
+            width: cardBox.width,
+            height: cardBox.height,
+            bottom: cardBox.bottom - gridBox.y,
+            right: cardBox.right - gridBox.x,
+            mediaCopySeam: copyBox.top - mediaBox.bottom,
+            cardTopSeam: mediaBox.top - cardBox.top,
+            cardBottomSeam: cardBox.bottom - copyBox.bottom,
+            cardLinkDelta: cardBox.height - linkBox.height,
+            contentDelta: linkBox.height - mediaBox.height - copyBox.height,
+            copyOverflow: copy.scrollHeight - copy.clientHeight
+          };
+        });
+        const lanes = new Map();
+        for (const card of cards) {
+          const lane = Math.round(card.x * 10) / 10;
+          if (!lanes.has(lane)) lanes.set(lane, []);
+          lanes.get(lane).push(card);
+        }
+        const laneGaps = [...lanes.values()].flatMap((items) => items
+          .sort((left, right) => left.y - right.y)
+          .slice(1)
+          .map((item, index) => item.y - items[index].bottom));
+        return {
+          ready: element.dataset.masonry,
+          gap,
+          gridHeight: gridBox.height,
+          gridWidth: gridBox.width,
+          gridTail: gridBox.height - Math.max(...cards.map((card) => card.bottom)),
+          laneCount: lanes.size,
+          laneGaps,
+          cards,
+          documentWidth: document.documentElement.scrollWidth,
+          viewportWidth: window.innerWidth
+        };
+      });
+
+      expect(metrics.ready, `${target.name}-${width}`).toBe('ready');
+      expect(metrics.cards, `${target.name}-${width}`).toHaveLength(target.count);
+      expect(metrics.laneCount, `${target.name}-${width}`).toBe(2);
+      expect(Math.max(...metrics.cards.map((card) => card.width)) - Math.min(...metrics.cards.map((card) => card.width))).toBeLessThanOrEqual(1);
+      expect(metrics.cards.every((card) => Math.abs(card.mediaCopySeam) <= 1)).toBe(true);
+      expect(metrics.cards.every((card) => Math.abs(card.cardTopSeam) <= 1)).toBe(true);
+      expect(metrics.cards.every((card) => Math.abs(card.cardBottomSeam) <= 1)).toBe(true);
+      expect(metrics.cards.every((card) => Math.abs(card.cardLinkDelta) <= 1)).toBe(true);
+      expect(metrics.cards.every((card) => Math.abs(card.contentDelta) <= 1)).toBe(true);
+      expect(metrics.cards.every((card) => card.copyOverflow <= 1)).toBe(true);
+      expect(metrics.cards.every((card) => card.right <= metrics.gridWidth + 1)).toBe(true);
+      expect(metrics.cards.slice(1).every((card, index) => card.y + 1 >= metrics.cards[index].y)).toBe(true);
+      expect(metrics.laneGaps.every((value) => Math.abs(value - metrics.gap) <= 1.5)).toBe(true);
+      expect(Math.abs(metrics.gridTail)).toBeLessThanOrEqual(1);
+      expect(metrics.documentWidth).toBeLessThanOrEqual(metrics.viewportWidth);
+
+      const hrefs = metrics.cards.map((card) => card.href);
+      if (!sourceOrders.has(target.name)) sourceOrders.set(target.name, hrefs);
+      expect(hrefs).toEqual(sourceOrders.get(target.name));
+      expect(metrics.cards.some((card) => card.className.includes('is-portrait'))).toBe(true);
+      expect(metrics.cards.some((card) => card.className.includes('is-landscape'))).toBe(true);
+      expect(metrics.cards.some((card) => card.className.includes('is-square'))).toBe(true);
+
+      const screenshot = await grid.screenshot();
+      await testInfo.attach(`news-${target.name}-${width}`, { body: screenshot, contentType: 'image/png' });
+    }
+  }
+
+  const realMediaIds = await page.locator('.editorial-media img').evaluateAll((items) => items.map((image) => image.dataset.mediaId));
   expect(new Set(realMediaIds).size).toBeGreaterThanOrEqual(5);
   await expect(page.locator('.editorial-card.is-no-media')).toHaveCount(1);
+});
 
-  const screenshot = await page.screenshot({ fullPage: true });
-  await testInfo.attach('news-390', { body: screenshot, contentType: 'image/png' });
+test('server-rendered news remains complete and readable without JavaScript', async ({ browser }) => {
+  const context = await browser.newContext({ javaScriptEnabled: false, viewport: { width: 390, height: 844 }, locale: 'ru-RU' });
+  const page = await context.newPage();
+  await page.goto('/news/', { waitUntil: 'networkidle' });
+  const grid = page.locator('.editorial-news');
+  await expect(grid).not.toHaveAttribute('data-masonry', 'ready');
+  await expect(grid.locator('.editorial-card')).toHaveCount(6);
+  await expect(grid.locator('.editorial-card a')).toHaveCount(6);
+  await expect(grid.locator('.editorial-card h3')).toHaveCount(6);
+
+  const metrics = await grid.evaluate((element) => {
+    const cards = [...element.querySelectorAll(':scope > .editorial-card')];
+    return {
+      columnCount: getComputedStyle(element).columnCount,
+      lanes: new Set(cards.map((card) => Math.round(card.getBoundingClientRect().x))).size,
+      seams: cards.map((card) => {
+        const media = card.querySelector('.editorial-media').getBoundingClientRect();
+        const copy = card.querySelector('.editorial-copy').getBoundingClientRect();
+        return copy.top - media.bottom;
+      })
+    };
+  });
+  expect(metrics.columnCount).toBe('2');
+  expect(metrics.lanes).toBe(2);
+  expect(metrics.seams.every((value) => Math.abs(value) <= 1)).toBe(true);
+  await context.close();
 });
 
 test('mobile menu opens the Sveden disclosure and closes it before the overlay on Escape', async ({ page }) => {
@@ -331,6 +413,9 @@ test('accessibility settings persist, reset and keep dialog focus deterministic'
   await expect(page.locator('html')).toHaveAttribute('data-images', 'off');
   await expect(page.locator('html')).toHaveAttribute('data-spacing', 'wide');
   await expect(page.locator('html')).toHaveAttribute('data-motion', 'off');
+  await expect.poll(() => page.locator('.editorial-news').evaluate((grid) => new Set(
+    [...grid.querySelectorAll(':scope > .editorial-card')].map((card) => Math.round(card.getBoundingClientRect().x))
+  ).size)).toBe(1);
   expect(await page.evaluate(() => JSON.parse(localStorage.getItem('brhk-access')))).toEqual({
     size: 'xlarge',
     theme: 'contrast',
@@ -363,6 +448,9 @@ test('accessibility settings persist, reset and keep dialog focus deterministic'
   await expect(page.locator('html')).toHaveAttribute('data-images', 'on');
   await expect(page.locator('html')).toHaveAttribute('data-spacing', 'normal');
   await expect(page.locator('html')).toHaveAttribute('data-motion', 'on');
+  await expect.poll(() => page.locator('.editorial-news').evaluate((grid) => new Set(
+    [...grid.querySelectorAll(':scope > .editorial-card')].map((card) => Math.round(card.getBoundingClientRect().x))
+  ).size)).toBe(2);
   expect(await page.evaluate(() => JSON.parse(localStorage.getItem('brhk-access')))).toEqual({
     size: 'normal',
     theme: 'normal',

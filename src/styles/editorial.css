@@ -1,95 +1,55 @@
 /*
- * Editorial news grid
+ * Editorial news masonry
  *
- * The card variant must describe the source image, not its position:
- *   is-portrait   — image ratio below 0.86
- *   is-landscape  — image ratio above 1.22
- *   is-square     — everything in between
- * Content may opt into is-wide or is-featured as an editorial override.
+ * The server-rendered fallback is a natural-height two-column flow. The
+ * client enhancement keeps the same flat chronological DOM and positions
+ * each card in the currently shortest lane, mirroring the supplied ZHdK
+ * reference without imposing fixed row heights on CMS content.
  */
 
 .editorial-news.editorial-news {
+  --editorial-columns: 2;
   --editorial-gap: 18px;
   --editorial-surface: #e9e7e3;
   --editorial-placeholder: #d9d1ca;
   --editorial-placeholder-ink: #851c24;
-  display: grid;
+  display: block;
   width: 100%;
   max-width: 100%;
   min-width: 0;
-  grid-template-columns: repeat(12, minmax(0, 1fr));
-  grid-auto-flow: dense;
-  grid-auto-rows: clamp(320px, 27vw, 390px);
-  gap: var(--editorial-gap);
-  align-items: stretch;
+  column-count: var(--editorial-columns);
+  column-gap: var(--editorial-gap);
+}
+
+.editorial-news.editorial-news-home {
+  max-width: 920px;
+  margin-inline: auto;
+}
+
+.editorial-news.editorial-news:has(> .editorial-card:only-child) {
+  --editorial-columns: 1;
 }
 
 .editorial-news.editorial-news > .editorial-card {
-  grid-column: span 4;
-  grid-row: span 1;
+  display: inline-block;
+  width: 100%;
   min-width: 0;
   max-width: 100%;
+  margin: 0 0 var(--editorial-gap);
   overflow: hidden;
+  break-inside: avoid;
+  vertical-align: top;
   background: var(--editorial-surface);
-}
-
-.editorial-news.editorial-news > .editorial-card.is-portrait {
-  grid-column: span 5;
-  grid-row: span 2;
-}
-
-.editorial-news.editorial-news > .editorial-card.is-landscape {
-  grid-column: span 7;
-  grid-row: span 1;
-}
-
-.editorial-news.editorial-news > .editorial-card.is-square {
-  grid-column: span 4;
-  grid-row: span 1;
-}
-
-.editorial-news.editorial-news > .editorial-card.is-wide {
-  grid-column: span 8;
-  grid-row: span 1;
-}
-
-.editorial-news.editorial-news > .editorial-card.is-featured {
-  grid-column: span 7;
-  grid-row: span 2;
+  transition: transform .25s ease, box-shadow .25s ease;
 }
 
 .editorial-news.editorial-news > .editorial-card > a {
-  display: grid;
+  display: block;
   width: 100%;
-  height: 100%;
+  height: auto;
   min-width: 0;
-  min-height: 0;
-  grid-template-rows: minmax(0, 55%) minmax(0, 45%);
-  overflow: hidden;
   color: inherit;
   text-decoration: none;
-}
-
-/*
- * Fixed proportions keep long headings from consuming the media track. This
- * is deliberately expressed per image shape: the source ratio still controls
- * the composition, while every photograph retains a useful visual area.
- */
-.editorial-news.editorial-news > .editorial-card.is-landscape > a {
-  grid-template-rows: minmax(0, 54%) minmax(0, 46%);
-}
-
-.editorial-news.editorial-news > .editorial-card.is-square > a {
-  grid-template-rows: minmax(0, 56%) minmax(0, 44%);
-}
-
-.editorial-news.editorial-news > .editorial-card.is-portrait > a,
-.editorial-news.editorial-news > .editorial-card.is-featured > a {
-  grid-template-rows: minmax(0, 65%) minmax(0, 35%);
-}
-
-.editorial-news.editorial-news > .editorial-card.is-wide:not(.is-featured) > a {
-  grid-template-rows: minmax(0, 57%) minmax(0, 43%);
 }
 
 .editorial-news .editorial-media {
@@ -97,7 +57,6 @@
   isolation: isolate;
   width: 100%;
   min-width: 0;
-  min-height: 0;
   margin: 0;
   overflow: hidden;
   background-color: var(--editorial-placeholder);
@@ -116,20 +75,18 @@
   pointer-events: none;
 }
 
+.editorial-news .editorial-media picture,
+.editorial-news .editorial-media img {
+  display: block;
+  width: 100%;
+  max-width: none;
+}
+
 .editorial-news .editorial-media img {
   position: relative;
   z-index: 1;
-  display: block;
-  width: 100%;
-  height: 100%;
-  max-width: none;
-  object-fit: cover;
-}
-
-.editorial-news .editorial-media picture {
-  display: block;
-  width: 100%;
-  height: 100%;
+  height: auto;
+  transition: transform .6s ease;
 }
 
 .editorial-news .editorial-credit {
@@ -151,7 +108,13 @@
   white-space: nowrap;
 }
 
-/* Supports an adapter-provided empty media state without showing a broken box. */
+/* A CMS record without media remains a deliberate square card, not a broken image. */
+.editorial-news .editorial-media:empty,
+.editorial-news .editorial-media[data-state="empty"],
+.editorial-news .editorial-card.is-no-media .editorial-media {
+  aspect-ratio: 1;
+}
+
 .editorial-news .editorial-media:empty::after,
 .editorial-news .editorial-media:not(:has(img))::after,
 .editorial-news .editorial-media[data-state="empty"]::after,
@@ -166,20 +129,27 @@
   letter-spacing: .16em;
 }
 
-.editorial-news .editorial-card.is-portrait .editorial-media img {
-  object-position: center 32%;
-}
-
-.editorial-news .editorial-card.is-landscape .editorial-media img,
-.editorial-news .editorial-card.is-wide .editorial-media img {
-  object-position: center 42%;
-}
-
 .editorial-news .editorial-copy {
+  position: relative;
   min-width: 0;
-  min-height: 0;
-  overflow: hidden;
+  padding: 20px 22px 24px;
+  overflow: visible;
   background: var(--editorial-surface);
+}
+
+.editorial-news .editorial-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 15px;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  font-size: .58rem;
+  font-weight: 700;
+}
+
+.editorial-news .editorial-meta time {
+  color: var(--muted);
+  white-space: nowrap;
 }
 
 .editorial-news .editorial-copy h3,
@@ -190,25 +160,53 @@
   hyphens: auto;
 }
 
-.editorial-news .editorial-copy p {
-  display: -webkit-box;
-  overflow: hidden;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-}
-
 .editorial-news .editorial-copy h3 {
   display: -webkit-box;
+  margin: 12px 35px 8px 0;
   overflow: hidden;
-  font-size: clamp(1.4rem, 2vw, 2rem);
+  font: 700 clamp(1.65rem, 2vw, 2.1rem)/1.04 var(--sans, Arial, Helvetica, sans-serif);
+  letter-spacing: -.035em;
   -webkit-box-orient: vertical;
-  -webkit-line-clamp: 3;
+  -webkit-line-clamp: 4;
 }
 
 .editorial-news .editorial-card.is-portrait .editorial-copy h3,
 .editorial-news .editorial-card.is-featured .editorial-copy h3 {
-  font-size: clamp(1.65rem, 2.4vw, 2.35rem);
-  -webkit-line-clamp: 4;
+  font-size: clamp(1.85rem, 2.35vw, 2.35rem);
+}
+
+.editorial-news .editorial-copy p {
+  display: -webkit-box;
+  margin: 0;
+  overflow: hidden;
+  color: #514a45;
+  font-size: .84rem;
+  line-height: 1.45;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.editorial-news .editorial-arrow {
+  position: absolute;
+  top: 49px;
+  right: 19px;
+  font-size: 1.3rem;
+}
+
+/* JavaScript only positions existing HTML; it never creates or fetches cards. */
+.editorial-news.editorial-news.is-masonry {
+  position: relative;
+  display: block;
+  min-height: 1px;
+  column-count: auto;
+}
+
+.editorial-news.editorial-news.is-masonry > .editorial-card {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: block;
+  margin: 0;
 }
 
 html[data-theme="contrast"] .editorial-news.editorial-news {
@@ -227,164 +225,54 @@ html[data-theme="contrast"] .editorial-news .editorial-media::before {
   border-color: rgba(255, 255, 255, .65);
 }
 
-/* The archive is intentionally a calmer two-column version of the same system. */
-.editorial-news.editorial-news-archive {
-  grid-auto-rows: clamp(330px, 34vw, 360px);
+html[data-size="xlarge"] .editorial-news.editorial-news {
+  --editorial-columns: 1;
 }
 
-.editorial-news.editorial-news-archive > .editorial-card.is-portrait {
-  grid-column: span 6;
-  grid-row: span 2;
-}
-
-.editorial-news.editorial-news-archive > .editorial-card.is-landscape,
-.editorial-news.editorial-news-archive > .editorial-card.is-square {
-  grid-column: span 6;
-  grid-row: span 1;
-}
-
-@media (max-width: 1180px) and (min-width: 861px) {
-  .editorial-news.editorial-news > .editorial-card.is-portrait,
-  .editorial-news.editorial-news > .editorial-card.is-landscape,
-  .editorial-news.editorial-news > .editorial-card.is-square {
-    grid-column: span 6;
-  }
-
-  .editorial-news.editorial-news > .editorial-card.is-wide,
-  .editorial-news.editorial-news > .editorial-card.is-featured {
-    grid-column: 1 / -1;
-  }
-}
-
-/*
- * Tablet: retain a two-column magazine instead of collapsing into a feed.
- * Portrait photographs occupy two rows, matching their real visual weight.
- */
-@media (max-width: 860px) and (min-width: 601px) {
+@media (max-width: 860px) {
   .editorial-news.editorial-news {
     --editorial-gap: 14px;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    grid-auto-rows: clamp(340px, 48vw, 410px);
-  }
-
-  .editorial-news.editorial-news > .editorial-card,
-  .editorial-news.editorial-news > .editorial-card.is-landscape,
-  .editorial-news.editorial-news > .editorial-card.is-square {
-    grid-column: span 1;
-    grid-row: span 1;
-  }
-
-  .editorial-news.editorial-news > .editorial-card.is-portrait {
-    grid-column: span 1;
-    grid-row: span 2;
-  }
-
-  .editorial-news.editorial-news > .editorial-card.is-wide,
-  .editorial-news.editorial-news > .editorial-card.is-featured {
-    grid-column: 1 / -1;
-    grid-row: span 1;
   }
 }
 
-/*
- * Phone magazine (including the 360–430px target range).
- * Small implicit rows plus explicit spans emulate masonry while keeping normal
- * DOM order and broad browser support. The image shape determines card height.
- */
 @media (max-width: 600px) {
   .editorial-news.editorial-news {
     --editorial-gap: clamp(8px, 2.5vw, 12px);
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    grid-auto-flow: dense;
-    grid-auto-rows: 8px;
-    column-gap: var(--editorial-gap);
-    row-gap: var(--editorial-gap);
   }
 
-  .editorial-news.editorial-news > .editorial-card,
-  .editorial-news.editorial-news > .editorial-card.is-square {
-    grid-column: span 1;
-    grid-row: span 21;
-  }
-
-  .editorial-news.editorial-news > .editorial-card.is-landscape {
-    grid-column: span 1;
-    grid-row: span 18;
-  }
-
-  .editorial-news.editorial-news > .editorial-card.is-portrait {
-    grid-column: span 1;
-    grid-row: span 25;
-  }
-
-  .editorial-news.editorial-news > .editorial-card.is-wide {
-    grid-column: span 1;
-    grid-row: span 18;
-  }
-
-  .editorial-news.editorial-news > .editorial-card.is-featured {
-    grid-column: span 1;
-    grid-row: span 26;
-  }
-
-  .editorial-news.editorial-news > .editorial-card > a {
-    grid-template-rows: minmax(0, 49%) minmax(0, 51%);
-  }
-
-  .editorial-news.editorial-news > .editorial-card.is-landscape > a {
-    grid-template-rows: minmax(0, 42%) minmax(0, 58%);
-  }
-
-  .editorial-news.editorial-news > .editorial-card.is-portrait > a {
-    grid-template-rows: minmax(0, 60%) minmax(0, 40%);
-  }
-
-  .editorial-news.editorial-news > .editorial-card.is-wide > a {
-    grid-template-rows: minmax(0, 55%) minmax(0, 45%);
-  }
-
-  .editorial-news.editorial-news > .editorial-card.is-featured > a {
-    grid-template-rows: minmax(0, 62%) minmax(0, 38%);
-  }
-
-  .editorial-news.editorial-news .editorial-copy,
-  .editorial-news.editorial-news .editorial-card.is-portrait .editorial-copy {
-    position: relative;
-    min-height: 0;
+  .editorial-news .editorial-copy,
+  .editorial-news .editorial-card.is-portrait .editorial-copy {
     padding: 12px 11px 30px;
-    overflow: hidden;
   }
 
-  .editorial-news.editorial-news .editorial-meta {
+  .editorial-news .editorial-meta {
     display: block;
     font-size: clamp(.5rem, 2.25vw, .62rem);
     line-height: 1.25;
     letter-spacing: .055em;
   }
 
-  .editorial-news.editorial-news .editorial-meta time {
+  .editorial-news .editorial-meta time {
     display: none;
   }
 
-  .editorial-news.editorial-news .editorial-copy h3,
-  .editorial-news.editorial-news .editorial-card.is-portrait .editorial-copy h3 {
-    display: -webkit-box;
+  .editorial-news .editorial-copy h3,
+  .editorial-news .editorial-card.is-portrait .editorial-copy h3,
+  .editorial-news .editorial-card.is-featured .editorial-copy h3 {
     margin: 9px 0 0;
-    overflow: hidden;
     font-family: var(--sans, Arial, Helvetica, sans-serif);
     font-size: clamp(1rem, 4.8vw, 1.28rem);
     font-weight: 700;
     line-height: 1.04;
     letter-spacing: -.035em;
-    -webkit-box-orient: vertical;
     -webkit-line-clamp: 5;
   }
 
-  .editorial-news.editorial-news .editorial-copy p {
+  .editorial-news .editorial-copy p {
     display: none;
   }
 
-  .editorial-news.editorial-news .editorial-arrow {
+  .editorial-news .editorial-arrow {
     top: auto;
     right: 10px;
     bottom: 8px;
@@ -392,57 +280,46 @@ html[data-theme="contrast"] .editorial-news .editorial-media::before {
     line-height: 1;
   }
 
-  .editorial-news.editorial-news > .editorial-card.is-wide .editorial-copy h3,
-  .editorial-news.editorial-news > .editorial-card.is-featured .editorial-copy h3 {
-    font-size: clamp(1rem, 4.8vw, 1.28rem);
-    -webkit-line-clamp: 5;
-  }
-
-  html[data-size="xlarge"] .editorial-news.editorial-news {
-    grid-template-columns: minmax(0, 1fr);
-    grid-auto-rows: auto;
-  }
-
-  html[data-size="xlarge"] .editorial-news.editorial-news > .editorial-card,
-  html[data-size="xlarge"] .editorial-news.editorial-news > .editorial-card.is-portrait,
-  html[data-size="xlarge"] .editorial-news.editorial-news > .editorial-card.is-landscape,
-  html[data-size="xlarge"] .editorial-news.editorial-news > .editorial-card.is-square,
-  html[data-size="xlarge"] .editorial-news.editorial-news > .editorial-card.is-wide,
-  html[data-size="xlarge"] .editorial-news.editorial-news > .editorial-card.is-featured {
-    grid-column: 1;
-    grid-row: auto;
-    min-height: 380px;
+  .editorial-news .editorial-credit {
+    right: 6px;
+    bottom: 6px;
+    left: 6px;
+    max-width: calc(100% - 12px);
+    padding: 4px 6px;
+    font-size: .52rem;
   }
 }
 
-/* Keep the magazine rhythm at 320px too; tighten rather than stack the cards. */
 @media (max-width: 339px) {
   .editorial-news.editorial-news {
     --editorial-gap: 7px;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    grid-auto-rows: 8px;
   }
 
-  .editorial-news.editorial-news .editorial-copy,
-  .editorial-news.editorial-news .editorial-card.is-portrait .editorial-copy {
+  .editorial-news .editorial-copy,
+  .editorial-news .editorial-card.is-portrait .editorial-copy {
     padding: 10px 9px 27px;
   }
 
-  .editorial-news.editorial-news .editorial-copy h3,
-  .editorial-news.editorial-news .editorial-card.is-portrait .editorial-copy h3,
-  .editorial-news.editorial-news > .editorial-card.is-wide .editorial-copy h3,
-  .editorial-news.editorial-news > .editorial-card.is-featured .editorial-copy h3 {
+  .editorial-news .editorial-copy h3,
+  .editorial-news .editorial-card.is-portrait .editorial-copy h3,
+  .editorial-news .editorial-card.is-featured .editorial-copy h3 {
     margin-top: 7px;
     font-size: .94rem;
   }
 
-  .editorial-news.editorial-news .editorial-meta {
+  .editorial-news .editorial-meta {
     font-size: .48rem;
     letter-spacing: .035em;
   }
 }
 
 @media (hover: hover) and (pointer: fine) {
+  .editorial-news .editorial-card:hover {
+    z-index: 1;
+    transform: translateY(-4px);
+    box-shadow: 0 18px 45px rgba(24, 18, 17, .13);
+  }
+
   .editorial-news .editorial-card:hover .editorial-media img {
     transform: scale(1.025);
   }

@@ -11,6 +11,7 @@ const accessPanel = document.getElementById('access-panel');
 const searchModal = document.getElementById('search-modal');
 const searchInput = document.getElementById('site-search');
 const searchResults = document.getElementById('search-results');
+const editorialGrids = [...document.querySelectorAll('.editorial-news')];
 
 const defaults = {
   size: 'normal',
@@ -31,6 +32,64 @@ const settings = { ...defaults, ...savedSettings };
 let activeDialog = null;
 let dialogTrigger = null;
 let searchIndex = null;
+let editorialLayoutFrame = 0;
+let editorialResizeObserver = null;
+
+function layoutEditorialGrid(grid) {
+  const cards = [...grid.querySelectorAll(':scope > .editorial-card')];
+  if (!cards.length || grid.clientWidth <= 0) return;
+
+  grid.classList.add('is-masonry');
+  const styles = getComputedStyle(grid);
+  const requestedColumns = Number.parseInt(styles.getPropertyValue('--editorial-columns'), 10) || 2;
+  const columns = Math.max(1, Math.min(requestedColumns, cards.length));
+  const gap = Number.parseFloat(styles.columnGap) || 0;
+  const cardWidth = (grid.clientWidth - gap * (columns - 1)) / columns;
+  const laneHeights = Array(columns).fill(0);
+
+  for (const card of cards) card.style.width = `${cardWidth}px`;
+
+  for (const card of cards) {
+    const shortest = Math.min(...laneHeights);
+    const lane = laneHeights.indexOf(shortest);
+    card.style.left = `${lane * (cardWidth + gap)}px`;
+    card.style.top = `${shortest}px`;
+    laneHeights[lane] = shortest + card.getBoundingClientRect().height + gap;
+  }
+
+  grid.style.height = `${Math.max(...laneHeights) - gap}px`;
+  grid.dataset.masonry = 'ready';
+}
+
+function scheduleEditorialLayouts() {
+  if (!editorialGrids.length) return;
+  for (const grid of editorialGrids) grid.dataset.masonry = 'pending';
+  cancelAnimationFrame(editorialLayoutFrame);
+  editorialLayoutFrame = requestAnimationFrame(() => {
+    editorialLayoutFrame = 0;
+    for (const grid of editorialGrids) layoutEditorialGrid(grid);
+  });
+}
+
+function initializeEditorialMasonry() {
+  if (!editorialGrids.length) return;
+
+  for (const grid of editorialGrids) {
+    for (const image of grid.querySelectorAll('img')) {
+      if (!image.complete) image.addEventListener('load', scheduleEditorialLayouts, { once: true });
+    }
+  }
+
+  if ('ResizeObserver' in window) {
+    editorialResizeObserver = new ResizeObserver(scheduleEditorialLayouts);
+    for (const grid of editorialGrids) {
+      for (const card of grid.querySelectorAll(':scope > .editorial-card')) editorialResizeObserver.observe(card);
+    }
+  }
+
+  document.fonts?.ready.then(scheduleEditorialLayouts);
+  scheduleEditorialLayouts();
+}
 
 function applySettings() {
   for (const [key, value] of Object.entries(settings)) {
@@ -47,6 +106,8 @@ function applySettings() {
   } catch {
     // Local storage may be unavailable in privacy modes; the controls still work.
   }
+
+  scheduleEditorialLayouts();
 }
 
 function isMobileNavigation() {
@@ -176,6 +237,7 @@ function renderSearchResults(results, query) {
 }
 
 applySettings();
+initializeEditorialMasonry();
 
 menu?.addEventListener('click', () => setMenu(!nav.classList.contains('open')));
 nav?.addEventListener('click', (event) => {
@@ -201,6 +263,7 @@ navigationViewport.addEventListener('change', (event) => {
 
 window.addEventListener('resize', () => {
   if (isMobileNavigation() && nav?.classList.contains('open')) updateNavigationTop();
+  scheduleEditorialLayouts();
 });
 
 document.addEventListener('click', (event) => {
