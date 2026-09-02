@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { existsSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import test from 'node:test';
@@ -208,8 +209,8 @@ test('global useful resources and footer social links are server-rendered', () =
 test('official logo, favicon and hashed first-party assets are emitted', () => {
   const html = readRoute('/');
   assert.match(html, /<link\s+rel="icon"[^>]+href="\/assets\/icons\/favicon-32\.png"/i);
-  assert.match(html, /<header[\s\S]*?<img[^>]+class="brand-logo"[^>]+src="\/assets\/images\/brhk-monogram\.png"[^>]+width="756"[^>]+height="410"/i);
-  assert.match(html, /<footer[\s\S]*?<img[^>]+class="footer-logo"[^>]+src="\/assets\/images\/brhk-monogram\.png"[^>]+width="756"[^>]+height="410"/i);
+  assert.match(html, /<header[\s\S]*?<img[^>]+class="brand-logo"[^>]+src="\/assets\/images\/brhk-logo-full\.png"[^>]+width="1705"[^>]+height="677"/i);
+  assert.match(html, /<footer[\s\S]*?<img[^>]+class="footer-logo"[^>]+src="\/assets\/images\/brhk-logo-full\.png"[^>]+width="1705"[^>]+height="677"/i);
   assert.doesNotMatch(html.match(/<header[\s\S]*?<\/header>/i)?.[0] || '', /brand-text/);
 
   const stylesheet = html.match(/<link\s+rel="stylesheet"\s+href="([^"]+)"/i)?.[1];
@@ -220,7 +221,7 @@ test('official logo, favicon and hashed first-party assets are emitted', () => {
   const requiredAssets = [
     stylesheet,
     script,
-    '/assets/images/brhk-monogram.png',
+    '/assets/images/brhk-logo-full.png',
     '/assets/icons/favicon-32.png',
     '/manifest.webmanifest',
     '/sitemap.xml',
@@ -233,6 +234,14 @@ test('official logo, favicon and hashed first-party assets are emitted', () => {
     assert.ok(existsSync(file), `${asset}: asset is missing`);
     assert.ok(statSync(file).size > 0, `${asset}: asset is empty`);
   }
+
+  const logoBytes = readFileSync(join(distRoot, 'assets', 'images', 'brhk-logo-full.png'));
+  assert.equal(logoBytes.byteLength, 87883, 'full logo byte length changed');
+  assert.equal(
+    createHash('sha256').update(logoBytes).digest('hex'),
+    'def5b0dfc87068369a21a6adb82bb999f57eb6a49f14e7d36336e2ce9ae22866',
+    'full client-provided logo must be emitted byte-for-byte'
+  );
 });
 
 test('sitemap contains every public route once', () => {

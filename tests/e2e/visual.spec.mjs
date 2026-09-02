@@ -24,7 +24,10 @@ const matrix = [
   { name: 'menu-open-390', route: '/', width: 390, height: 844, state: 'menu', fullPage: false },
   { name: 'menu-sveden-open-390', route: '/', width: 390, height: 844, state: 'menu-sveden', fullPage: false },
   { name: 'nav-sveden-open-1440', route: '/sveden/common/', width: 1440, height: 1000, state: 'sveden-nav', fullPage: false },
-  { name: 'accessibility-open-390', route: '/', width: 390, height: 844, state: 'accessibility', fullPage: false }
+  { name: 'accessibility-open-390', route: '/', width: 390, height: 844, state: 'accessibility', fullPage: false },
+  { name: 'accessibility-large-header-1181', route: '/', width: 1181, height: 900, state: 'size-large', fullPage: false },
+  { name: 'accessibility-xlarge-header-1181', route: '/', width: 1181, height: 900, state: 'size-xlarge', fullPage: false },
+  { name: 'accessibility-xlarge-header-1440', route: '/', width: 1440, height: 900, state: 'size-xlarge', fullPage: false }
 ];
 
 async function loadWholePage(page) {
@@ -38,6 +41,14 @@ async function loadWholePage(page) {
 }
 
 async function prepareState(page, state) {
+  if (state?.startsWith('size-')) {
+    const size = state.slice('size-'.length);
+    await page.locator('[data-access-open]').click();
+    await page.locator(`[data-setting="size"][data-value="${size}"]`).click();
+    await page.locator('[data-access-close]').click();
+    await expect(page.locator('html')).toHaveAttribute('data-size', size);
+  }
+
   if (state === 'menu' || state === 'menu-sveden') {
     const button = page.locator('#menu-button');
     await button.click();

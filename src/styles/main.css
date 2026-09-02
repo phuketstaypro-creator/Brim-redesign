@@ -319,6 +319,26 @@ html[data-motion=off] *{animation:none!important;transition:none!important;scrol
 html[data-motion=off] .useful-link-card:hover{transform:none}
 html[data-size=xlarge] .useful-links-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
 
+/* The accessibility font sizes need the compact navigation before the normal viewport breakpoint. */
+html.nav-enhanced.nav-compact .header-inner{flex-wrap:nowrap}
+html.nav-enhanced.nav-compact .primary-nav{position:fixed;z-index:400;left:0;right:0;top:var(--nav-top,122px);bottom:0;display:block;align-self:auto;width:auto;margin:0;padding:10px 24px calc(26px + env(safe-area-inset-bottom));overflow:auto;background:#171211;border-top:0;opacity:0;visibility:hidden;pointer-events:none;transform:translateY(-10px);transition:opacity .2s,transform .2s,visibility 0s linear .2s}
+html.nav-enhanced.nav-compact .primary-nav.open{opacity:1;visibility:visible;pointer-events:auto;transform:none;transition-delay:0s}
+html.nav-enhanced.nav-compact .primary-nav>.primary-nav-list{display:flex;flex-direction:column;align-items:stretch;gap:0}
+html.nav-enhanced.nav-compact .nav-item{display:block;border-bottom:1px solid rgba(255,255,255,.16)}
+html.nav-enhanced.nav-compact .nav-item>a,html.nav-enhanced.nav-compact .nav-disclosure>summary{display:flex;min-height:44px;padding:13px 2px;font-size:1rem}
+html.nav-enhanced.nav-compact .nav-disclosure{display:block;height:auto}
+html.nav-enhanced.nav-compact .nav-disclosure>summary{justify-content:space-between}
+html.nav-enhanced.nav-compact .nav-panel,html.nav-enhanced.nav-compact .nav-disclosure.is-large .nav-panel{position:static;width:auto;max-height:none;overflow:visible;border:0;border-top:1px solid rgba(255,255,255,.12);box-shadow:none;background:#211919}
+html.nav-enhanced.nav-compact .nav-panel-inner{padding:0 0 14px}
+html.nav-enhanced.nav-compact .nav-overview{min-height:44px;margin:0;padding:12px 16px;border-bottom:1px solid rgba(255,255,255,.12);font:1rem/1.3 var(--sans)}
+html.nav-enhanced.nav-compact .nav-panel-groups{gap:0}
+html.nav-enhanced.nav-compact .nav-panel-group+.nav-panel-group{margin-top:8px;padding-top:8px;border-top:1px solid rgba(255,255,255,.12)}
+html.nav-enhanced.nav-compact .nav-panel-label{margin:0;padding:12px 16px 4px}
+html.nav-enhanced.nav-compact .nav-panel-list,html.nav-enhanced.nav-compact .nav-disclosure.is-large .nav-panel-list{grid-template-columns:1fr;gap:0}
+html.nav-enhanced.nav-compact .nav-panel-list a{min-height:44px;padding:10px 16px;border-radius:0;font-size:.9rem}
+html.nav-enhanced.nav-compact .nav-cta{display:flex!important;min-height:44px!important;padding:13px 2px!important;border:0;border-radius:0}
+html.nav-enhanced.nav-compact .menu-button{display:inline-flex;align-items:center;justify-content:center;position:relative;z-index:402}
+
 @media(max-width:1180px){
   .primary-nav>.primary-nav-list{gap:10px}
   .nav-item>a,.nav-disclosure>summary{font-size:.66rem}
@@ -450,26 +470,27 @@ html[data-size=xlarge] .useful-links-grid{grid-template-columns:repeat(3,minmax(
   .useful-link-card:hover{transform:none}
 }
 
-/* Client-supplied BRHK identity asset. Keep its intrinsic proportions intact. */
+/* Client-supplied full BRHK logo. Keep its intrinsic proportions intact. */
 .brand{flex:0 0 auto;min-width:0;min-height:44px}
-.brand-logo-wrap{position:relative;display:flex;align-items:center;justify-content:center;width:128px;flex:0 0 128px;overflow:visible}
+.brand-logo-wrap{position:relative;display:flex;align-items:center;justify-content:center;width:320px;flex:0 0 auto;overflow:visible}
 .brand-logo{display:block;width:100%;height:auto;max-width:none;object-fit:contain}
 .footer-logo-link{display:inline-flex;align-items:center;max-width:100%;margin:0 0 18px;text-decoration:none}
-.footer-logo{display:block;width:min(250px,100%);height:auto;object-fit:contain}
+.footer-logo{display:block;width:min(390px,100%);height:auto;object-fit:contain}
 .footer-brand p{max-width:520px}
+html.nav-enhanced.nav-compact .brand{flex:1 1 auto}
+html.nav-enhanced.nav-compact .brand-logo-wrap{max-width:100%}
+html.nav-enhanced.nav-compact .menu-button{flex:0 0 auto}
 html[data-images=off] .brand-logo-wrap::after{content:'БРХК';position:absolute;inset:0;display:grid;place-items:center;font:2rem/1 var(--serif);color:#eee5dd}
 html[data-images=off] .footer-logo-link::after{content:'БРХК';display:block;font:3.8rem/1 var(--serif);color:#eee5dd}
 
 @media(max-width:1180px){
-  .brand-logo-wrap{width:112px;flex-basis:112px}
+  .brand-logo-wrap{width:280px}
 }
 
 @media(max-width:1080px){
-  .brand-logo-wrap{width:104px;flex-basis:104px}
-  .footer-logo{width:210px}
+  .brand-logo-wrap{width:min(280px,calc(100vw - 108px))}
 }
 
 @media(max-width:430px){
-  .brand-logo-wrap{width:88px;flex-basis:88px}
-  .footer-logo{width:180px}
+  .footer-logo{width:min(330px,100%)}
 }

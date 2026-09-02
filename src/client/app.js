@@ -6,7 +6,6 @@ const nav = document.getElementById('primary-nav');
 const menu = document.getElementById('menu-button');
 const header = document.querySelector('.site-header');
 const navDisclosures = nav ? [...nav.querySelectorAll('[data-nav-disclosure]')] : [];
-const navigationViewport = window.matchMedia('(max-width: 1080px)');
 const accessPanel = document.getElementById('access-panel');
 const searchModal = document.getElementById('search-modal');
 const searchInput = document.getElementById('site-search');
@@ -34,6 +33,7 @@ let dialogTrigger = null;
 let searchIndex = null;
 let editorialLayoutFrame = 0;
 let editorialResizeObserver = null;
+let compactNavigation = false;
 
 function layoutEditorialGrid(grid) {
   const cards = [...grid.querySelectorAll(':scope > .editorial-card')];
@@ -107,11 +107,34 @@ function applySettings() {
     // Local storage may be unavailable in privacy modes; the controls still work.
   }
 
+  updateNavigationMode();
   scheduleEditorialLayouts();
 }
 
 function isMobileNavigation() {
-  return navigationViewport.matches;
+  return compactNavigation;
+}
+
+function navigationBreakpoint() {
+  if (settings.size === 'xlarge') return 1420;
+  if (settings.size === 'large') return 1280;
+  return 1080;
+}
+
+function updateNavigationMode() {
+  const wasCompact = compactNavigation;
+  compactNavigation = window.innerWidth <= navigationBreakpoint();
+  documentElement.classList.toggle('nav-compact', compactNavigation);
+  if (wasCompact === compactNavigation) return;
+
+  const focusWasInNavigation = Boolean(nav?.contains(document.activeElement));
+  const focusWasOnMenu = document.activeElement === menu;
+  setMenu(false);
+  closeNavigationDisclosures();
+  requestAnimationFrame(() => {
+    if (compactNavigation && focusWasInNavigation) menu?.focus();
+    else if (!compactNavigation && (focusWasInNavigation || focusWasOnMenu)) firstNavigationTarget()?.focus();
+  });
 }
 
 function updateNavigationTop() {
@@ -250,18 +273,8 @@ for (const disclosure of navDisclosures) {
   });
 }
 
-navigationViewport.addEventListener('change', (event) => {
-  const focusWasInNavigation = Boolean(nav?.contains(document.activeElement));
-  const focusWasOnMenu = document.activeElement === menu;
-  setMenu(false);
-  closeNavigationDisclosures();
-  requestAnimationFrame(() => {
-    if (event.matches && focusWasInNavigation) menu?.focus();
-    else if (!event.matches && (focusWasInNavigation || focusWasOnMenu)) firstNavigationTarget()?.focus();
-  });
-});
-
 window.addEventListener('resize', () => {
+  updateNavigationMode();
   if (isMobileNavigation() && nav?.classList.contains('open')) updateNavigationTop();
   scheduleEditorialLayouts();
 });

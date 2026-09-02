@@ -73,7 +73,7 @@ test('official logo and favicon are served as images', async ({ page, request })
     await expect.poll(() => locator.evaluate((image) => image.complete && image.naturalWidth > 0)).toBe(true);
   }
 
-  for (const asset of ['/assets/images/brhk-monogram.png', '/assets/icons/favicon-32.png']) {
+  for (const asset of ['/assets/images/brhk-logo-full.png', '/assets/icons/favicon-32.png']) {
     const response = await request.get(asset);
     expect(response.status(), asset).toBe(200);
     expect(response.headers()['content-type'], asset).toMatch(/^image\//);
@@ -81,8 +81,21 @@ test('official logo and favicon are served as images', async ({ page, request })
   }
 });
 
-test('header monogram keeps its proportions and stays inside the layout', async ({ page }) => {
-  for (const width of [320, 390, 430, 431, 768, 860, 861, 1080, 1081, 1180, 1181, 1440]) {
+test('full header and footer logos keep their proportions and stay inside the layout', async ({ page }) => {
+  for (const { width, renderedWidth } of [
+    { width: 320, renderedWidth: 212 },
+    { width: 390, renderedWidth: 280 },
+    { width: 430, renderedWidth: 280 },
+    { width: 431, renderedWidth: 280 },
+    { width: 768, renderedWidth: 280 },
+    { width: 860, renderedWidth: 280 },
+    { width: 861, renderedWidth: 280 },
+    { width: 1080, renderedWidth: 280 },
+    { width: 1081, renderedWidth: 280 },
+    { width: 1180, renderedWidth: 280 },
+    { width: 1181, renderedWidth: 320 },
+    { width: 1440, renderedWidth: 320 }
+  ]) {
     await page.setViewportSize({ width, height: 900 });
     const response = await page.goto('/', { waitUntil: 'domcontentloaded' });
     expect(response?.status()).toBe(200);
@@ -93,6 +106,9 @@ test('header monogram keeps its proportions and stays inside the layout', async 
       const logoRect = logo.getBoundingClientRect();
       const brandRect = brand.getBoundingClientRect();
       const headerRect = header.getBoundingClientRect();
+      const menu = header.querySelector('.menu-button');
+      const menuVisible = getComputedStyle(menu).display !== 'none';
+      const neighborRect = (menuVisible ? menu : header.querySelector('.primary-nav')).getBoundingClientRect();
       return {
         naturalWidth: logo.naturalWidth,
         naturalHeight: logo.naturalHeight,
@@ -100,17 +116,50 @@ test('header monogram keeps its proportions and stays inside the layout', async 
         intrinsicRatio: logo.naturalWidth / logo.naturalHeight,
         insideBrand: logoRect.left >= brandRect.left - 1 && logoRect.right <= brandRect.right + 1,
         insideHeader: logoRect.top >= headerRect.top - 1 && logoRect.bottom <= headerRect.bottom + 1,
+        noNavigationCollision: brandRect.right <= neighborRect.left,
+        renderedWidth: logoRect.width,
         documentWidth: document.documentElement.scrollWidth,
         viewportWidth: window.innerWidth
       };
     });
 
-    expect(layout.naturalWidth, `${width}: intrinsic width`).toBe(756);
-    expect(layout.naturalHeight, `${width}: intrinsic height`).toBe(410);
+    expect(layout.naturalWidth, `${width}: intrinsic width`).toBe(1705);
+    expect(layout.naturalHeight, `${width}: intrinsic height`).toBe(677);
     expect(Math.abs(layout.renderedRatio - layout.intrinsicRatio), `${width}: distorted logo`).toBeLessThan(0.01);
+    expect(Math.abs(layout.renderedWidth - renderedWidth), `${width}: unexpected logo width`).toBeLessThan(1);
     expect(layout.insideBrand, `${width}: logo escaped brand`).toBe(true);
     expect(layout.insideHeader, `${width}: logo escaped header`).toBe(true);
+    expect(layout.noNavigationCollision, `${width}: logo collided with navigation`).toBe(true);
     expect(layout.documentWidth, `${width}: horizontal overflow`).toBeLessThanOrEqual(layout.viewportWidth);
+  }
+
+  for (const width of [320, 390, 1440]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto('/', { waitUntil: 'domcontentloaded' });
+    const layout = await page.locator('footer a.footer-logo-link').evaluate((link) => {
+      const logo = link.querySelector('img.footer-logo');
+      const footer = link.closest('.site-footer');
+      const logoRect = logo.getBoundingClientRect();
+      const linkRect = link.getBoundingClientRect();
+      const footerRect = footer.getBoundingClientRect();
+      return {
+        naturalWidth: logo.naturalWidth,
+        naturalHeight: logo.naturalHeight,
+        renderedRatio: logoRect.width / logoRect.height,
+        intrinsicRatio: logo.naturalWidth / logo.naturalHeight,
+        insideLink: logoRect.left >= linkRect.left - 1 && logoRect.right <= linkRect.right + 1,
+        insideFooter: logoRect.left >= footerRect.left - 1 && logoRect.right <= footerRect.right + 1,
+        documentWidth: document.documentElement.scrollWidth,
+        viewportWidth: window.innerWidth
+      };
+    });
+
+    expect(layout.naturalWidth, `${width}: footer intrinsic width`).toBe(1705);
+    expect(layout.naturalHeight, `${width}: footer intrinsic height`).toBe(677);
+    expect(Math.abs(layout.renderedRatio - layout.intrinsicRatio), `${width}: distorted footer logo`).toBeLessThan(0.01);
+    expect(layout.insideLink, `${width}: footer logo escaped link`).toBe(true);
+    expect(layout.insideFooter, `${width}: footer logo escaped footer`).toBe(true);
+    expect(layout.documentWidth, `${width}: footer caused horizontal overflow`).toBeLessThanOrEqual(layout.viewportWidth);
   }
 
   await page.setViewportSize({ width: 390, height: 844 });
@@ -118,6 +167,57 @@ test('header monogram keeps its proportions and stays inside the layout', async 
   await page.locator('html').evaluate((root) => { root.dataset.images = 'off'; });
   const fallback = await page.locator('.brand-logo-wrap').evaluate((element) => getComputedStyle(element, '::after').content);
   expect(fallback).toBe('"БРХК"');
+});
+
+test('larger accessibility text switches the header before navigation can collide', async ({ page }) => {
+  await page.goto('/', { waitUntil: 'domcontentloaded' });
+
+  for (const { size, width, compact } of [
+    { size: 'large', width: 320, compact: true },
+    { size: 'large', width: 390, compact: true },
+    { size: 'large', width: 430, compact: true },
+    { size: 'xlarge', width: 320, compact: true },
+    { size: 'xlarge', width: 390, compact: true },
+    { size: 'xlarge', width: 430, compact: true },
+    { size: 'normal', width: 1080, compact: true },
+    { size: 'normal', width: 1081, compact: false },
+    { size: 'large', width: 1280, compact: true },
+    { size: 'large', width: 1281, compact: false },
+    { size: 'xlarge', width: 1420, compact: true },
+    { size: 'xlarge', width: 1421, compact: false },
+    { size: 'xlarge', width: 1440, compact: false }
+  ]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.evaluate((selectedSize) => {
+      localStorage.setItem('brhk-access', JSON.stringify({ size: selectedSize }));
+    }, size);
+    await page.reload({ waitUntil: 'domcontentloaded' });
+
+    const layout = await page.locator('.site-header').evaluate((header) => {
+      const brand = header.querySelector('.brand');
+      const brandRect = brand.getBoundingClientRect();
+      const logoRect = brand.querySelector('.brand-logo').getBoundingClientRect();
+      const navRect = header.querySelector('.primary-nav').getBoundingClientRect();
+      const menu = header.querySelector('.menu-button');
+      const menuRect = menu.getBoundingClientRect();
+      const menuDisplay = getComputedStyle(menu).display;
+      const isCompact = document.documentElement.classList.contains('nav-compact');
+      return {
+        isCompact,
+        menuVisible: menuDisplay !== 'none',
+        logoInsideBrand: logoRect.left >= brandRect.left - 1 && logoRect.right <= brandRect.right + 1,
+        noCollision: brandRect.right <= (isCompact ? menuRect.left : navRect.left),
+        headerScrollWidth: header.scrollWidth,
+        headerWidth: header.clientWidth
+      };
+    });
+
+    expect(layout.isCompact, `${size} at ${width}: compact class`).toBe(compact);
+    expect(layout.menuVisible, `${size} at ${width}: menu visibility`).toBe(compact);
+    expect(layout.logoInsideBrand, `${size} at ${width}: logo escaped brand`).toBe(true);
+    expect(layout.noCollision, `${size} at ${width}: navigation collision`).toBe(true);
+    expect(layout.headerScrollWidth, `${size} at ${width}: header overflow`).toBeLessThanOrEqual(layout.headerWidth);
+  }
 });
 
 test('useful resources and college social links stay responsive and server-rendered', async ({ page }) => {

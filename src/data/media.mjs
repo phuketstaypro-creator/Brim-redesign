@@ -186,13 +186,13 @@ const studioSquare = studioAsset(
 
 const logo = {
   id: 'logo',
-  ...rendition('brhk-monogram.png', 756, 410),
-  defaultAlt: 'Фирменный знак Бурятского республиканского хореографического колледжа',
-  source: 'repository:public/assets/images/brhk-monogram.png',
-  originalName: '1-Фото-1.jpg',
+  ...rendition('brhk-logo-full.png', 1705, 677),
+  defaultAlt: 'Полный логотип Бурятского республиканского хореографического колледжа',
+  source: 'repository:public/assets/images/brhk-logo-full.png',
+  originalName: 'БРХК65 бело-красный полный.png',
   rightsStatus: 'client-provided-pending-final-rights-check',
   credit: null,
-  variants: [rendition('brhk-monogram.png', 756, 410)]
+  variants: [rendition('brhk-logo-full.png', 1705, 677)]
 };
 
 function alias(asset, id) {
