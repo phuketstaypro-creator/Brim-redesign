@@ -181,6 +181,24 @@ test('English and Chinese routes are fully localized server documents with route
   assert.ok(chineseDisclosure.includes('href="/zh/sveden/managers/"'));
 });
 
+test('home statistics present the three simultaneous education paths in every locale', () => {
+  const expected = new Map([
+    ['/', ['образования одновременно', 'Школа', 'Музыка', 'Балет']],
+    ['/en/', ['forms of education at the same time', 'School', 'Music', 'Ballet']],
+    ['/zh/', ['种教育同步进行', '学校教育', '音乐', '芭蕾']]
+  ]);
+
+  for (const [route, labels] of expected) {
+    const html = readRoute(route);
+    const card = [...html.matchAll(/<div class="stat">([\s\S]*?)<\/div>/g)]
+      .map((match) => match[0])
+      .find((markup) => markup.includes('<b>3</b>'));
+    assert.ok(card, `${route}: simultaneous education statistic is missing`);
+    assert.match(card, /<ul class="stat-details">/);
+    for (const label of labels) assert.ok(card.includes(label), `${route}: statistic is missing ${label}`);
+  }
+});
+
 test('locale routing prefixes pages but preserves deployment-wide files', () => {
   assert.equal(publicContentHref('en', '/news/'), '/en/news/');
   assert.equal(publicContentHref('zh', '/sveden/common/'), '/zh/sveden/common/');

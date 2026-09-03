@@ -319,6 +319,11 @@ function validateSite(site, issues) {
         if (!requiredObject(item, prefix, issues)) return;
         requiredString(item.value, `${prefix}.value`, issues);
         requiredString(item.label, `${prefix}.label`, issues);
+        if (item.details !== undefined) {
+          const details = requiredArray(item.details, `${prefix}.details`, issues);
+          if (details && !details.length) issues.push(`${prefix}.details must contain at least one item`);
+          details?.forEach((detail, detailIndex) => requiredString(detail, `${prefix}.details[${detailIndex}]`, issues));
+        }
       });
     }
 

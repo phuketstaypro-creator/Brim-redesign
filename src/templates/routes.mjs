@@ -47,7 +47,12 @@ function actionLinks(actions = []) {
 }
 
 function stats(items = []) {
-  return `<div class="stats">${items.map((item) => `<div class="stat"><b>${esc(item.value)}</b><span>${esc(item.label)}</span></div>`).join('')}</div>`;
+  return `<div class="stats">${items.map((item) => {
+    const details = Array.isArray(item.details) && item.details.length
+      ? `<ul class="stat-details">${item.details.map((detail) => `<li>${esc(detail)}</li>`).join('')}</ul>`
+      : '';
+    return `<div class="stat"><b>${esc(item.value)}</b><span>${esc(item.label)}</span>${details}</div>`;
+  }).join('')}</div>`;
 }
 
 function admissionSteps(items = []) {

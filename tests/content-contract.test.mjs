@@ -19,7 +19,30 @@ test('local adapter returns a validated CMS-neutral bundle', async () => {
   assert.equal(content.svedenSections.filter((section) => section.group === 'mandatory').length, 14);
   assert.ok(content.svedenSections.length >= SVEDEN_REQUIRED_ROUTES.length);
   assert.ok(content.media.length >= 10);
+  assert.deepEqual(content.site.home.about.stats[2], {
+    value: '3',
+    label: 'образования одновременно',
+    details: ['Школа', 'Музыка', 'Балет']
+  });
   for (const route of REQUIRED_ROUTES) assert.ok(routes.has(route), route);
+});
+
+test('home statistic details must be a non-empty list of labels', async () => {
+  const mutations = [
+    (raw) => { raw.site.home.about.stats[2].details = 'Школа, Музыка, Балет'; },
+    (raw) => { raw.site.home.about.stats[2].details = []; },
+    (raw) => { raw.site.home.about.stats[2].details = ['Школа', '', 'Балет']; }
+  ];
+
+  for (const mutate of mutations) {
+    const raw = structuredClone(await loadLocalContent());
+    mutate(raw);
+    await assert.rejects(
+      loadContent({ cwd: projectRoot, adapter: async () => raw }),
+      (error) => error instanceof ContentContractError
+        && error.message.includes('site.home.about.stats[2].details')
+    );
+  }
 });
 
 test('hierarchical navigation is validated recursively', async () => {

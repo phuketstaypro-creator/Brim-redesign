@@ -38,6 +38,27 @@ test('all adapter routes return filled HTML without JavaScript rendering', async
   }
 });
 
+test('home statistic shows school, music and ballet as three simultaneous paths', async ({ page }) => {
+  for (const width of [320, 390, 1440]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto('/', { waitUntil: 'domcontentloaded' });
+
+    const card = page.locator('.stats .stat').nth(2);
+    await expect(card.locator('b')).toHaveText('3');
+    await expect(card.locator(':scope > span')).toHaveText('образования одновременно');
+    await expect(card.locator('.stat-details li')).toHaveText(['Школа', 'Музыка', 'Балет']);
+
+    const geometry = await card.evaluate((element) => ({
+      clientWidth: element.clientWidth,
+      scrollWidth: element.scrollWidth,
+      viewportWidth: document.documentElement.clientWidth,
+      documentWidth: document.documentElement.scrollWidth
+    }));
+    expect(geometry.scrollWidth, `${width}: statistic content overflows its cell`).toBeLessThanOrEqual(geometry.clientWidth + 1);
+    expect(geometry.documentWidth, `${width}: statistic causes horizontal page overflow`).toBeLessThanOrEqual(geometry.viewportWidth + 1);
+  }
+});
+
 test('unknown routes return the real 404 document and status', async ({ page }) => {
   const response = await page.goto('/route-that-must-not-exist-404/', { waitUntil: 'domcontentloaded' });
   expect(response?.status()).toBe(404);

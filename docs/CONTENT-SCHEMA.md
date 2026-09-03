@@ -74,7 +74,7 @@ Validator и renderer требуют полноценную global model:
 | `home` | обязательные structured sections главной |
 | `gallery` | обязательный `GalleryItem[]` |
 
-`home.hero` требует `eyebrow`, `title`, `description`, media ID `image`, `imageAlt` и `actions[]`. `ticker` — непустой string array. `about` требует section fields `index`/`label`/`title`/`lead`, manifest texts, media ID/alt/labels и `stats[]` с `value`/`label`. `education` и `news` требуют section fields с `lead`; `gallery` — без обязательного `lead`. `admission` дополнительно содержит `steps[]` с `title`, `description`, `href`, `linkLabel`.
+`home.hero` требует `eyebrow`, `title`, `description`, media ID `image`, `imageAlt` и `actions[]`. `ticker` — непустой string array. `about` требует section fields `index`/`label`/`title`/`lead`, manifest texts, media ID/alt/labels и `stats[]` с `value`/`label`; необязательный `details[]` добавляет короткий список пояснений внутри карточки показателя. `education` и `news` требуют section fields с `lead`; `gallery` — без обязательного `lead`. `admission` дополнительно содержит `steps[]` с `title`, `description`, `href`, `linkLabel`.
 
 Все navigation/action href должны быть безопасным внутренним route, HTTPS, `mailto:` или `tel:` URL. `site.gallery[]` требует media ID `image`, `alt`, `caption`; `compact` optional.
 
