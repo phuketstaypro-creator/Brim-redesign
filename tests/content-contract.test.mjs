@@ -112,7 +112,9 @@ test('unknown media, duplicate slugs and unsafe routes fail the contract', async
     (raw) => { raw.newsItems[0].coverImage = 'missing-media'; raw.newsItems[0].image = 'missing-media'; },
     (raw) => { raw.newsItems[0].gallery = [{ image: 'missing-media', alt: 'Missing' }]; },
     (raw) => { raw.newsItems[1].slug = raw.newsItems[0].slug; },
-    (raw) => { raw.newsItems[0].href = '/../escape/'; }
+    (raw) => { raw.newsItems[0].href = '/../escape/'; },
+    (raw) => { raw.newsItems[0].href = '/en/reserved-locale-prefix/'; },
+    (raw) => { raw.newsItems[0].href = '/zh/reserved-locale-prefix/'; }
   ];
 
   for (const mutate of cases) {

@@ -180,12 +180,14 @@ test('larger accessibility text switches the header before navigation can collid
     { size: 'xlarge', width: 390, compact: true },
     { size: 'xlarge', width: 430, compact: true },
     { size: 'normal', width: 1080, compact: true },
-    { size: 'normal', width: 1081, compact: false },
-    { size: 'large', width: 1280, compact: true },
-    { size: 'large', width: 1281, compact: false },
-    { size: 'xlarge', width: 1420, compact: true },
-    { size: 'xlarge', width: 1421, compact: false },
-    { size: 'xlarge', width: 1440, compact: false }
+    { size: 'normal', width: 1081, compact: true },
+    { size: 'normal', width: 1220, compact: true },
+    { size: 'normal', width: 1221, compact: false },
+    { size: 'large', width: 1320, compact: true },
+    { size: 'large', width: 1321, compact: false },
+    { size: 'xlarge', width: 1440, compact: true },
+    { size: 'xlarge', width: 1450, compact: true },
+    { size: 'xlarge', width: 1451, compact: false }
   ]) {
     await page.setViewportSize({ width, height: 900 });
     await page.evaluate((selectedSize) => {
@@ -587,13 +589,13 @@ test('new institutional routes and hierarchical navigation remain filled with Ja
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('Психологическая служба');
     await expect(page.locator('.legal-note')).toContainText('Утверждённые материалы не переданы для публикации');
     await expect(page.locator('#primary-nav [data-nav-summary]').filter({ hasText: 'Сведения' })).toHaveCount(1);
-    await expect(page.locator('#primary-nav a[href="/students/psychological-service/"]')).toHaveCount(2);
+    await expect(page.locator('#primary-nav .nav-item:not(.nav-language-item) a[href="/students/psychological-service/"]')).toHaveCount(2);
     await expect(page.locator('.disclosure-directory a[href="/students/psychological-service/"]')).toHaveAttribute('aria-current', 'page');
 
     await page.goto('/sveden/managers/', { waitUntil: 'domcontentloaded' });
     await expect(page.getByRole('heading', { level: 1 })).toContainText('Руководство');
     await expect(page.locator('.disclosure-directory a[href="/sveden/managers/"]')).toHaveAttribute('aria-current', 'page');
-    await expect(page.locator('#primary-nav a[href="/sveden/managers/"]')).toHaveAttribute('aria-current', 'page');
+    await expect(page.locator('#primary-nav .nav-item:not(.nav-language-item) a[href="/sveden/managers/"]')).toHaveAttribute('aria-current', 'page');
 
     await page.goto('/sitemap/', { waitUntil: 'domcontentloaded' });
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('Карта сайта');

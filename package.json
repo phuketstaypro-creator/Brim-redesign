@@ -12,7 +12,7 @@
     "validate:content": "node scripts/validate-content.mjs",
     "test": "npm run build && node --test tests/build.test.mjs tests/content-contract.test.mjs tests/image-metadata.test.mjs",
     "test:content": "node --test tests/content-contract.test.mjs",
-    "test:e2e": "playwright test tests/e2e/site.spec.mjs",
+    "test:e2e": "playwright test tests/e2e/site.spec.mjs tests/e2e/i18n.spec.mjs",
     "test:a11y": "playwright test tests/e2e/a11y.spec.mjs",
     "test:visual": "playwright test tests/e2e/visual.spec.mjs"
   },

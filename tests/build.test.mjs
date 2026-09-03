@@ -7,12 +7,18 @@ import test from 'node:test';
 import { loadContent } from '../src/content/load-content.mjs';
 import { REQUIRED_ROUTES, SVEDEN_REQUIRED_ROUTES } from '../src/content/required-routes.mjs';
 import { collectPublicRoutes } from '../src/content/validate.mjs';
+import { publicContentHref } from '../src/i18n/routing.mjs';
 
 const projectRoot = resolve(import.meta.dirname, '..');
 const distRoot = join(projectRoot, 'dist');
 const content = await loadContent({ env: { CONTENT_ADAPTER: 'local' }, cwd: projectRoot });
 const publicRoutes = collectPublicRoutes(content);
 const { svedenSections } = content;
+const localeSpecs = [
+  { id: 'ru', prefix: '', htmlLang: 'ru', hreflang: 'ru' },
+  { id: 'en', prefix: '/en', htmlLang: 'en', hreflang: 'en' },
+  { id: 'zh', prefix: '/zh', htmlLang: 'zh-CN', hreflang: 'zh-CN' }
+];
 const forbiddenLoaderMarkers = [
   'raw.githubusercontent.com',
   '<div id="app"></div>',
@@ -29,6 +35,17 @@ function readRoute(route) {
   const file = routeFile(route);
   assert.ok(existsSync(file), `${route}: generated HTML is missing at ${file}`);
   return readFileSync(file, 'utf8');
+}
+
+function localizedRoute(prefix, route) {
+  if (route === '/') return prefix ? `${prefix}/` : '/';
+  return `${prefix}${route}`;
+}
+
+function linkTag(html, attributes) {
+  return [...html.matchAll(/<link\b[^>]*>/gi)]
+    .map((match) => match[0])
+    .find((tag) => Object.entries(attributes).every(([name, value]) => tag.includes(`${name}="${value}"`)));
 }
 
 function stripMarkup(html) {
@@ -66,10 +83,11 @@ function builtTarget(url) {
 
 test('build emits every unique filled route supplied by the content adapter', () => {
   assert.equal(new Set(publicRoutes).size, publicRoutes.length);
+  assert.equal(publicRoutes.length, 73, 'the local content adapter logical route count changed');
   assert.ok(existsSync(distRoot), 'dist/ is missing; run npm run build first');
 
   const generatedRouteFiles = htmlFiles(distRoot).filter((file) => !file.endsWith('404.html'));
-  assert.equal(generatedRouteFiles.length, publicRoutes.length, 'unexpected number of generated route documents');
+  assert.equal(generatedRouteFiles.length, publicRoutes.length * localeSpecs.length, 'unexpected number of generated route documents');
 
   const titles = new Set();
   for (const route of publicRoutes) {
@@ -95,6 +113,111 @@ test('build emits every unique filled route supplied by the content adapter', ()
   }
 
   for (const route of REQUIRED_ROUTES) assert.ok(publicRoutes.includes(route), `${route}: required route absent`);
+});
+
+test('English and Chinese routes are fully localized server documents with route-preserving language alternates', () => {
+  const canonicalBase = content.site.baseUrl.replace(/\/$/, '');
+  const representativeRoutes = ['/', '/sveden/common/'];
+
+  for (const locale of localeSpecs) {
+    for (const logicalRoute of publicRoutes) {
+      const route = localizedRoute(locale.prefix, logicalRoute);
+      const html = readRoute(route);
+      const canonical = linkTag(html, { rel: 'canonical' })?.match(/href="([^"]+)"/i)?.[1];
+      const main = html.match(/<main\b[^>]*>([\s\S]*?)<\/main>/i)?.[1] || '';
+
+      assert.match(html, new RegExp(`^<!doctype html>\\s*<html lang="${locale.htmlLang.replace('-', '\\-')}"`), `${route}: wrong html lang`);
+      assert.equal(canonical, `${canonicalBase}${route}`, `${route}: canonical must be self-referencing`);
+      assert.ok(stripMarkup(main).length >= 100, `${route}: localized main content is not server-rendered`);
+      const internalMainLinks = [...main.matchAll(/\bhref="(\/[^"]*)"/gi)]
+        .map((match) => match[1])
+        .filter((href) => !href.startsWith('/assets/'));
+      assert.ok(
+        internalMainLinks.every((href) => locale.prefix ? href.startsWith(`${locale.prefix}/`) : !/^\/(?:en|zh)(?:\/|$)/.test(href)),
+        `${route}: main content contains an internal link outside its locale`
+      );
+      if (locale.id !== 'ru') {
+        assert.doesNotMatch(main, /[А-Яа-яЁё]/, `${route}: untranslated Cyrillic remains in localized main`);
+      }
+
+      for (const alternate of localeSpecs) {
+        const alternateRoute = localizedRoute(alternate.prefix, logicalRoute);
+        const expectedHref = `${canonicalBase}${alternateRoute}`;
+        assert.ok(
+          linkTag(html, { rel: 'alternate', hreflang: alternate.hreflang, href: expectedHref }),
+          `${route}: missing ${alternate.hreflang} alternate for ${alternateRoute}`
+        );
+      }
+      assert.ok(
+        linkTag(html, { rel: 'alternate', hreflang: 'x-default', href: `${canonicalBase}${logicalRoute}` }),
+        `${route}: missing Russian x-default alternate`
+      );
+    }
+
+    for (const logicalRoute of representativeRoutes) {
+      const route = localizedRoute(locale.prefix, logicalRoute);
+      const html = readRoute(route);
+      const header = html.match(/<header\b[\s\S]*?<\/header>/i)?.[0] || '';
+      assert.match(header, /class="nav-item nav-language-item"/, `${route}: language selector is missing from the header navigation`);
+      for (const alternate of localeSpecs) {
+        const target = localizedRoute(alternate.prefix, logicalRoute);
+        assert.ok(header.includes(`href="${target}"`), `${route}: language selector does not preserve ${logicalRoute} for ${alternate.id}`);
+      }
+    }
+  }
+
+  const englishHome = readRoute('/en/');
+  assert.ok(englishHome.includes('href="/en/education/"'));
+  assert.ok(englishHome.includes('href="/en/news/"'));
+  const englishDisclosure = readRoute('/en/sveden/common/');
+  assert.ok(englishDisclosure.includes('href="/en/sveden/"'));
+  assert.ok(englishDisclosure.includes('href="/en/sveden/managers/"'));
+
+  const chineseHome = readRoute('/zh/');
+  assert.ok(chineseHome.includes('href="/zh/education/"'));
+  assert.ok(chineseHome.includes('href="/zh/news/"'));
+  const chineseDisclosure = readRoute('/zh/sveden/common/');
+  assert.ok(chineseDisclosure.includes('href="/zh/sveden/"'));
+  assert.ok(chineseDisclosure.includes('href="/zh/sveden/managers/"'));
+});
+
+test('locale routing prefixes pages but preserves deployment-wide files', () => {
+  assert.equal(publicContentHref('en', '/news/'), '/en/news/');
+  assert.equal(publicContentHref('zh', '/sveden/common/'), '/zh/sveden/common/');
+  assert.equal(publicContentHref('en', '/uploads/order.pdf'), '/uploads/order.pdf');
+  assert.equal(publicContentHref('zh', '/assets/files/report.docx'), '/assets/files/report.docx');
+  assert.equal(publicContentHref('en', 'https://example.edu/file.pdf'), 'https://example.edu/file.pdf');
+});
+
+test('search indexes, web manifests and RSS feeds are emitted per locale', () => {
+  for (const locale of localeSpecs) {
+    const searchFile = join(distRoot, locale.prefix.replace(/^\//, ''), 'search-index.json');
+    const manifestFile = join(distRoot, locale.prefix.replace(/^\//, ''), 'manifest.webmanifest');
+    const rssFile = join(distRoot, locale.prefix.replace(/^\//, ''), 'rss.xml');
+
+    for (const file of [searchFile, manifestFile, rssFile]) {
+      assert.ok(existsSync(file), `${file}: localized service file is missing`);
+      assert.ok(statSync(file).size > 0, `${file}: localized service file is empty`);
+    }
+
+    const searchIndex = JSON.parse(readFileSync(searchFile, 'utf8'));
+    assert.ok(searchIndex.length > publicRoutes.length / 2, `${locale.id}: search index is unexpectedly small`);
+    assert.ok(searchIndex.every((item) => item.title && item.description && item.url), `${locale.id}: search item is incomplete`);
+    assert.ok(searchIndex.every((item) => locale.prefix ? item.url.startsWith(`${locale.prefix}/`) : !/^\/(?:en|zh)(?:\/|$)/.test(item.url)), `${locale.id}: search URL escaped its locale`);
+
+    const manifest = JSON.parse(readFileSync(manifestFile, 'utf8'));
+    assert.equal(manifest.lang, locale.htmlLang, `${locale.id}: wrong manifest language`);
+    assert.equal(manifest.start_url, localizedRoute(locale.prefix, '/'), `${locale.id}: wrong manifest start URL`);
+    assert.ok(readRoute(localizedRoute(locale.prefix, '/')).includes(`rel="manifest" href="${localizedRoute(locale.prefix, '/manifest.webmanifest')}"`), `${locale.id}: page does not reference its localized manifest`);
+
+    const rss = readFileSync(rssFile, 'utf8');
+    assert.ok(rss.includes(`<language>${locale.htmlLang}</language>`), `${locale.id}: wrong RSS language`);
+    assert.ok(rss.includes(`<link>${content.site.baseUrl}${localizedRoute(locale.prefix, '/news/')}</link>`), `${locale.id}: wrong RSS channel URL`);
+    if (locale.id !== 'ru') {
+      assert.doesNotMatch(JSON.stringify(searchIndex), /[А-Яа-яЁё]/, `${locale.id}: search index contains untranslated Cyrillic`);
+      assert.doesNotMatch(rss, /[А-Яа-яЁё]/, `${locale.id}: RSS contains untranslated Cyrillic`);
+    }
+  }
 });
 
 test('404 is a filled standalone noindex document', () => {
@@ -244,13 +367,44 @@ test('official logo, favicon and hashed first-party assets are emitted', () => {
   );
 });
 
-test('sitemap contains every public route once', () => {
+test('Vercel applies security and cache headers before filesystem and localized 404 routes', () => {
+  const config = JSON.parse(readFileSync(join(projectRoot, 'vercel.json'), 'utf8'));
+  const routes = config.routes || [];
+  const filesystemIndex = routes.findIndex((route) => route.handle === 'filesystem');
+  assert.ok(filesystemIndex > 0, 'filesystem phase must follow response-header routes');
+  const preFilesystem = routes.slice(0, filesystemIndex);
+  assert.ok(preFilesystem.every((route) => route.continue === true && route.headers), 'header routes must continue into filesystem routing');
+  assert.ok(preFilesystem.some((route) => route.headers['Content-Security-Policy']), 'security headers are missing');
+  assert.ok(preFilesystem.some((route) => route.src.includes('assets/media') && /immutable/.test(route.headers['Cache-Control'] || '')), 'hashed media cache route is missing');
+  assert.deepEqual(routes.slice(-3).map(({ src, status, dest }) => ({ src, status, dest })), [
+    { src: '/en(?:/.*)?', status: 404, dest: '/en/404.html' },
+    { src: '/zh(?:/.*)?', status: 404, dest: '/zh/404.html' },
+    { src: '/.*', status: 404, dest: '/404.html' }
+  ]);
+});
+
+test('sitemap contains 219 unique localized URLs with complete language alternates', () => {
   const sitemap = readFileSync(join(distRoot, 'sitemap.xml'), 'utf8');
   const locations = [...sitemap.matchAll(/<loc>([^<]+)<\/loc>/g)].map((match) => match[1]);
-  assert.equal(locations.length, publicRoutes.length);
-  assert.equal(new Set(locations).size, publicRoutes.length);
-  for (const route of publicRoutes) {
-    assert.ok(locations.some((location) => new URL(location).pathname === route), `${route}: absent from sitemap`);
+  const expectedRouteCount = publicRoutes.length * localeSpecs.length;
+  assert.equal(locations.length, expectedRouteCount);
+  assert.equal(new Set(locations).size, expectedRouteCount);
+
+  for (const logicalRoute of publicRoutes) {
+    for (const locale of localeSpecs) {
+      const route = localizedRoute(locale.prefix, logicalRoute);
+      assert.ok(locations.some((location) => new URL(location).pathname === route), `${route}: absent from sitemap`);
+    }
+  }
+
+  const entries = [...sitemap.matchAll(/<url>([\s\S]*?)<\/url>/g)].map((match) => match[1]);
+  assert.equal(entries.length, expectedRouteCount);
+  for (const entry of entries) {
+    const location = entry.match(/<loc>([^<]+)<\/loc>/)?.[1] || '(unknown)';
+    for (const locale of localeSpecs) {
+      assert.match(entry, new RegExp(`<xhtml:link rel="alternate" hreflang="${locale.hreflang}" href="[^"]+"\/>`), `${location}: missing ${locale.hreflang} sitemap alternate`);
+    }
+    assert.match(entry, /<xhtml:link rel="alternate" hreflang="x-default" href="[^"]+"\/>/, `${location}: missing x-default sitemap alternate`);
   }
 });
 
@@ -268,7 +422,9 @@ test('handoff route map documents every public route exactly once', () => {
 
 test('content media is fingerprinted and the public manifest exposes safe provenance metadata', () => {
   const manifest = JSON.parse(readFileSync(join(distRoot, 'content-manifest.json'), 'utf8'));
-  assert.equal(manifest.routeCount, publicRoutes.length);
+  assert.deepEqual(manifest.locales, localeSpecs.map((locale) => locale.id));
+  assert.equal(manifest.logicalRouteCount, publicRoutes.length);
+  assert.equal(manifest.routeCount, publicRoutes.length * localeSpecs.length);
   assert.equal(manifest.collections.news, content.newsItems.length);
   assert.equal(manifest.collections.media, content.media.length);
   assert.ok(manifest.media.every((asset) => /^\/assets\/media\/[a-z0-9-]+\.[a-f0-9]{12}\.(?:avif|gif|jpe?g|png|webp)$/.test(asset.src)));
@@ -407,6 +563,8 @@ test('json adapter drives the complete build and renders CMS collections into se
 
     const manifest = JSON.parse(readFileSync(join(distRoot, 'content-manifest.json'), 'utf8'));
     assert.equal(manifest.adapter, 'json');
+    assert.deepEqual(manifest.locales, ['ru'], 'JSON adapter must remain Russian-only unless CONTENT_LOCALES is explicitly set');
+    assert.equal(manifest.logicalRouteCount, publicRoutes.length + 1);
     assert.equal(manifest.collections.events, jsonContent.events.length);
     assert.equal(manifest.collections.employees, jsonContent.employees.length);
     assert.equal(manifest.collections.documents, jsonContent.documents.length);
@@ -418,5 +576,42 @@ test('json adapter drives the complete build and renders CMS collections into se
     delete localEnv.CMS_CONTENT_FILE;
     const restored = runBuild(localEnv);
     assert.equal(restored.status, 0, `Failed to restore the local build after JSON adapter test:\n${buildFailure(restored)}`);
+  }
+});
+
+test('a non-Russian locale can be built independently with a complete manifest', { concurrency: false }, () => {
+  const runBuild = (env) => spawnSync(process.execPath, ['build.mjs'], {
+    cwd: projectRoot,
+    env,
+    encoding: 'utf8',
+    maxBuffer: 10 * 1024 * 1024
+  });
+  const buildFailure = (result) => [result.stdout, result.stderr].filter(Boolean).join('\n');
+
+  try {
+    const result = runBuild({
+      ...process.env,
+      CONTENT_ADAPTER: 'local',
+      CONTENT_LOCALES: 'en',
+      ALLOW_INDEXING: 'false'
+    });
+    assert.equal(result.status, 0, `English-only build failed:\n${buildFailure(result)}`);
+
+    const manifest = JSON.parse(readFileSync(join(distRoot, 'content-manifest.json'), 'utf8'));
+    assert.deepEqual(manifest.locales, ['en']);
+    assert.equal(manifest.logicalRouteCount, publicRoutes.length);
+    assert.equal(manifest.routeCount, publicRoutes.length);
+    assert.equal(manifest.media.length, content.media.length);
+    const homeHtml = readFileSync(join(distRoot, 'en', 'index.html'), 'utf8');
+    assert.match(homeHtml, /^<!doctype html>\s*<html lang="en"/);
+    assert.doesNotMatch(homeHtml, /hreflang="x-default"/, 'English-only build must not point x-default at an unbuilt Russian route');
+    for (const fallback of ['404.html', join('en', '404.html'), join('zh', '404.html')]) {
+      assert.ok(existsSync(join(distRoot, fallback)), `locale-subset build is missing stable fallback ${fallback}`);
+    }
+  } finally {
+    const localEnv = { ...process.env, CONTENT_ADAPTER: 'local', ALLOW_INDEXING: 'false' };
+    delete localEnv.CONTENT_LOCALES;
+    const restored = runBuild(localEnv);
+    assert.equal(restored.status, 0, `Failed to restore the default locale build:\n${buildFailure(restored)}`);
   }
 });
