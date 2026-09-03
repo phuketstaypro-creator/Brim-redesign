@@ -114,14 +114,26 @@ function usefulLinkCards(items) {
   }).join('');
 }
 
-function languageNavigation(logicalRoute) {
+function languageLinks(logicalRoute) {
   const locale = currentLocale();
   const available = currentAvailableLocales();
-  const links = routeAlternates(logicalRoute).filter((alternate) => available.includes(alternate.locale)).map((alternate) => {
+  return routeAlternates(logicalRoute).filter((alternate) => available.includes(alternate.locale)).map((alternate) => {
     const current = alternate.locale === locale.id ? ' aria-current="page"' : '';
     return `<li><a href="${esc(alternate.href)}" hreflang="${esc(alternate.hreflang)}" lang="${esc(alternate.htmlLang)}"${current}>${esc(alternate.nativeName)}</a></li>`;
   }).join('');
-  return `<li class="nav-item nav-language-item"><details class="nav-disclosure language-disclosure" data-nav-disclosure><summary data-nav-summary><span class="language-current" aria-hidden="true">${esc(locale.shortLabel)}</span><span class="visually-hidden">${esc(message('currentLanguage'))}</span><span class="nav-summary-icon" aria-hidden="true"></span></summary><div class="nav-panel language-panel" data-nav-panel><div class="nav-panel-inner"><ul class="language-list" aria-label="${esc(message('availableLanguages'))}">${links}</ul></div></div></details></li>`;
+}
+
+function languageSummary() {
+  const locale = currentLocale();
+  return `<span class="language-current" aria-hidden="true">${esc(locale.shortLabel)}</span><span class="visually-hidden">${esc(message('currentLanguage'))}</span><span class="nav-summary-icon" aria-hidden="true"></span>`;
+}
+
+function languageNavigation(logicalRoute) {
+  return `<li class="nav-item nav-language-item"><details class="nav-disclosure language-disclosure" data-nav-disclosure><summary data-nav-summary>${languageSummary()}</summary><div class="nav-panel language-panel" data-nav-panel><div class="nav-panel-inner"><ul class="language-list" aria-label="${esc(message('availableLanguages'))}">${languageLinks(logicalRoute)}</ul></div></div></details></li>`;
+}
+
+function utilityLanguageNavigation(logicalRoute) {
+  return `<details class="utility-language-selector" data-utility-language-disclosure><summary data-utility-language-summary>${languageSummary()}</summary><div class="utility-language-panel"><ul class="language-list" aria-label="${esc(message('availableLanguages'))}">${languageLinks(logicalRoute)}</ul></div></details>`;
 }
 
 function logoImage(logo, className, alt) {
@@ -167,6 +179,7 @@ export function renderLayout({ site, route, title, description, content, cssHref
   const brandAriaLabel = brandLabel ? `${brandLabel} — ${message('toHome')}` : message('homeAria');
   const primaryNavigation = `${navigation(siteData.navigation, safeRoute)}${languageNavigation(logicalRoute)}`;
   const utilityNavigation = inlineLinks(siteData.utilityNavigation);
+  const utilityLanguage = utilityLanguageNavigation(logicalRoute);
   const quickLinks = inlineLinks(siteData.quickLinks);
   const usefulLinks = usefulLinkCards(siteData.usefulLinks);
   const footerNavigation = inlineLinks(siteData.footerNavigation);
@@ -234,7 +247,7 @@ export function renderLayout({ site, route, title, description, content, cssHref
     </div>
   </div>
 
-  <div class="utility"><div class="wrap utility-inner"><span class="utility-label">${esc(siteData.utilityLabel)}</span><div class="utility-actions"><button type="button" data-search-open>${esc(message('search'))}</button><button type="button" data-access-open>${esc(message('accessibleVersion'))}</button>${utilityNavigation}</div></div></div>
+  <div class="utility"><div class="wrap utility-inner"><span class="utility-label">${esc(siteData.utilityLabel)}</span><div class="utility-actions"><button type="button" data-search-open>${esc(message('search'))}</button><button type="button" data-access-open>${esc(message('accessibleVersion'))}</button>${utilityNavigation}${utilityLanguage}</div></div></div>
 
   <header class="site-header"><div class="wrap header-inner"><a class="brand" href="${esc(localHref('/'))}" aria-label="${esc(brandAriaLabel)}"><span class="brand-logo-wrap" aria-hidden="true">${logoImage(logo, 'brand-logo', '')}</span></a><nav class="primary-nav" id="primary-nav" aria-label="${esc(message('primaryNavigation'))}"><ul class="primary-nav-list" data-nav-list>${primaryNavigation}</ul></nav><button class="menu-button" id="menu-button" type="button" aria-controls="primary-nav" aria-expanded="false">${esc(message('menu'))}</button></div></header>
 

@@ -16,6 +16,10 @@ const nav = document.getElementById('primary-nav');
 const menu = document.getElementById('menu-button');
 const header = document.querySelector('.site-header');
 const navDisclosures = nav ? [...nav.querySelectorAll('[data-nav-disclosure]')] : [];
+const primaryLanguageDisclosure = nav?.querySelector('.language-disclosure') || null;
+const primaryLanguageSummary = primaryLanguageDisclosure?.querySelector('[data-nav-summary]') || null;
+const utilityLanguageDisclosure = document.querySelector('[data-utility-language-disclosure]');
+const utilityLanguageSummary = utilityLanguageDisclosure?.querySelector('[data-utility-language-summary]') || null;
 const accessPanel = document.getElementById('access-panel');
 const searchModal = document.getElementById('search-modal');
 const searchInput = document.getElementById('site-search');
@@ -138,11 +142,16 @@ function updateNavigationMode() {
   if (wasCompact === compactNavigation) return;
 
   const focusWasInNavigation = Boolean(nav?.contains(document.activeElement));
+  const focusWasInPrimaryLanguage = Boolean(primaryLanguageDisclosure?.contains(document.activeElement));
+  const focusWasInUtilityLanguage = Boolean(utilityLanguageDisclosure?.contains(document.activeElement));
   const focusWasOnMenu = document.activeElement === menu;
   setMenu(false);
   closeNavigationDisclosures();
+  closeUtilityLanguageDisclosure();
   requestAnimationFrame(() => {
-    if (compactNavigation && focusWasInNavigation) menu?.focus();
+    if (compactNavigation && focusWasInPrimaryLanguage) utilityLanguageSummary?.focus();
+    else if (!compactNavigation && focusWasInUtilityLanguage) primaryLanguageSummary?.focus();
+    else if (compactNavigation && focusWasInNavigation) menu?.focus();
     else if (!compactNavigation && (focusWasInNavigation || focusWasOnMenu)) firstNavigationTarget()?.focus();
   });
 }
@@ -171,6 +180,13 @@ function closeNavigationDisclosures({ except = null } = {}) {
 
 function openNavigationDisclosure() {
   return navDisclosures.find((disclosure) => disclosure.open) || null;
+}
+
+function closeUtilityLanguageDisclosure({ restoreFocus = false } = {}) {
+  if (!utilityLanguageDisclosure?.open) return false;
+  utilityLanguageDisclosure.open = false;
+  if (restoreFocus) utilityLanguageSummary?.focus();
+  return true;
 }
 
 function setMenu(open, { restoreFocus = false } = {}) {
@@ -272,16 +288,28 @@ function renderSearchResults(results, query) {
 applySettings();
 initializeEditorialMasonry();
 
-menu?.addEventListener('click', () => setMenu(!nav.classList.contains('open')));
+menu?.addEventListener('click', () => {
+  closeUtilityLanguageDisclosure();
+  setMenu(!nav.classList.contains('open'));
+});
 nav?.addEventListener('click', (event) => {
   if (event.target.closest('a')) setMenu(false);
 });
 
 for (const disclosure of navDisclosures) {
   disclosure.addEventListener('toggle', () => {
-    if (disclosure.open) closeNavigationDisclosures({ except: disclosure });
+    if (disclosure.open) {
+      closeUtilityLanguageDisclosure();
+      closeNavigationDisclosures({ except: disclosure });
+    }
   });
 }
+
+utilityLanguageDisclosure?.addEventListener('toggle', () => {
+  if (!utilityLanguageDisclosure.open) return;
+  setMenu(false);
+  closeNavigationDisclosures();
+});
 
 window.addEventListener('resize', () => {
   updateNavigationMode();
@@ -303,6 +331,7 @@ document.addEventListener('click', (event) => {
 
   const accessOpen = event.target.closest('[data-access-open]');
   if (accessOpen) {
+    closeUtilityLanguageDisclosure();
     setMenu(false);
     openDialog(accessPanel, accessOpen);
   }
@@ -310,6 +339,7 @@ document.addEventListener('click', (event) => {
 
   const searchOpen = event.target.closest('[data-search-open]');
   if (searchOpen) {
+    closeUtilityLanguageDisclosure();
     setMenu(false);
     openDialog(searchModal, searchOpen, searchInput);
   }
@@ -317,6 +347,7 @@ document.addEventListener('click', (event) => {
 
   if (activeDialog && event.target === activeDialog) closeDialog(activeDialog);
   if (!isMobileNavigation() && nav && !nav.contains(event.target)) closeNavigationDisclosures();
+  if (utilityLanguageDisclosure?.open && !utilityLanguageDisclosure.contains(event.target)) closeUtilityLanguageDisclosure();
 });
 
 document.addEventListener('keydown', (event) => {
@@ -324,6 +355,12 @@ document.addEventListener('keydown', (event) => {
   if (event.key !== 'Escape') return;
   if (activeDialog) {
     closeDialog(activeDialog);
+    return;
+  }
+
+  if (utilityLanguageDisclosure?.open) {
+    event.preventDefault();
+    closeUtilityLanguageDisclosure({ restoreFocus: true });
     return;
   }
 

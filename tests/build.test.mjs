@@ -158,10 +158,13 @@ test('English and Chinese routes are fully localized server documents with route
       const route = localizedRoute(locale.prefix, logicalRoute);
       const html = readRoute(route);
       const header = html.match(/<header\b[\s\S]*?<\/header>/i)?.[0] || '';
+      const utility = html.match(/<div class="utility">[\s\S]*?<header\b/i)?.[0] || '';
       assert.match(header, /class="nav-item nav-language-item"/, `${route}: language selector is missing from the header navigation`);
+      assert.match(utility, /class="utility-language-selector" data-utility-language-disclosure/, `${route}: language selector is missing from the utility bar`);
       for (const alternate of localeSpecs) {
         const target = localizedRoute(alternate.prefix, logicalRoute);
         assert.ok(header.includes(`href="${target}"`), `${route}: language selector does not preserve ${logicalRoute} for ${alternate.id}`);
+        assert.ok(utility.includes(`href="${target}"`), `${route}: utility language selector does not preserve ${logicalRoute} for ${alternate.id}`);
       }
     }
   }

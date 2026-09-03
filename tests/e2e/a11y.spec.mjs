@@ -62,16 +62,15 @@ test('expanded mobile Sveden navigation has no serious or critical axe violation
 test('expanded desktop language selector has no serious or critical axe violations', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto('/en/sveden/common/', { waitUntil: 'networkidle' });
-  await page.locator('.language-disclosure > summary').click();
+  await page.locator('#primary-nav .language-disclosure > summary').click();
   const summary = await blockingAxeViolations(page);
   expect(summary, JSON.stringify(summary, null, 2)).toEqual([]);
 });
 
-test('language selector inside the Chinese mobile menu has no serious or critical axe violations', async ({ page }) => {
+test('language selector in the Chinese mobile utility bar has no serious or critical axe violations', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/zh/', { waitUntil: 'networkidle' });
-  await page.locator('#menu-button').click();
-  await page.locator('.language-disclosure > summary').click();
+  await page.locator('.utility-language-selector > summary').click();
   const summary = await blockingAxeViolations(page);
   expect(summary, JSON.stringify(summary, null, 2)).toEqual([]);
 });

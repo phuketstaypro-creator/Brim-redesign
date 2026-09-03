@@ -224,22 +224,32 @@ test('larger accessibility text switches the header before navigation can collid
       const menu = header.querySelector('.menu-button');
       const menuRect = menu.getBoundingClientRect();
       const menuDisplay = getComputedStyle(menu).display;
+      const primaryLanguage = header.querySelector('.nav-language-item');
+      const utilityLanguage = document.querySelector('.utility-language-selector');
+      const utility = document.querySelector('.utility');
       const isCompact = document.documentElement.classList.contains('nav-compact');
       return {
         isCompact,
         menuVisible: menuDisplay !== 'none',
+        primaryLanguageVisible: getComputedStyle(primaryLanguage).display !== 'none',
+        utilityLanguageVisible: getComputedStyle(utilityLanguage).display !== 'none',
         logoInsideBrand: logoRect.left >= brandRect.left - 1 && logoRect.right <= brandRect.right + 1,
         noCollision: brandRect.right <= (isCompact ? menuRect.left : navRect.left),
         headerScrollWidth: header.scrollWidth,
-        headerWidth: header.clientWidth
+        headerWidth: header.clientWidth,
+        utilityScrollWidth: utility.scrollWidth,
+        utilityWidth: utility.clientWidth
       };
     });
 
     expect(layout.isCompact, `${size} at ${width}: compact class`).toBe(compact);
     expect(layout.menuVisible, `${size} at ${width}: menu visibility`).toBe(compact);
+    expect(layout.utilityLanguageVisible, `${size} at ${width}: utility language visibility`).toBe(compact);
+    expect(layout.primaryLanguageVisible, `${size} at ${width}: primary language visibility`).toBe(!compact);
     expect(layout.logoInsideBrand, `${size} at ${width}: logo escaped brand`).toBe(true);
     expect(layout.noCollision, `${size} at ${width}: navigation collision`).toBe(true);
     expect(layout.headerScrollWidth, `${size} at ${width}: header overflow`).toBeLessThanOrEqual(layout.headerWidth);
+    expect(layout.utilityScrollWidth, `${size} at ${width}: utility overflow`).toBeLessThanOrEqual(layout.utilityWidth);
   }
 });
 

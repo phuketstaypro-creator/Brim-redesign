@@ -22,6 +22,7 @@ const matrix = [
   { name: 'sitemap-390', route: '/sitemap/', width: 390, height: 844 },
   { name: 'sitemap-1440', route: '/sitemap/', width: 1440, height: 1000 },
   { name: 'menu-open-390', route: '/', width: 390, height: 844, state: 'menu', fullPage: false },
+  { name: 'language-open-390', route: '/', width: 390, height: 844, state: 'language', fullPage: false },
   { name: 'menu-sveden-open-390', route: '/', width: 390, height: 844, state: 'menu-sveden', fullPage: false },
   { name: 'nav-sveden-open-1440', route: '/sveden/common/', width: 1440, height: 1000, state: 'sveden-nav', fullPage: false },
   { name: 'accessibility-open-390', route: '/', width: 390, height: 844, state: 'accessibility', fullPage: false },
@@ -54,6 +55,13 @@ async function prepareState(page, state) {
     await button.click();
     await expect(button).toHaveAttribute('aria-expanded', 'true');
     await expect(page.locator('#primary-nav')).toHaveClass(/\bopen\b/);
+  }
+
+  if (state === 'language') {
+    const selector = page.locator('.utility-language-selector');
+    await selector.locator('> summary').click();
+    await expect(selector).toHaveAttribute('open', '');
+    await expect(selector.locator('.language-list')).toBeVisible();
   }
 
   if (state === 'menu-sveden' || state === 'sveden-nav') {
