@@ -253,11 +253,61 @@ test('rich text is escaped and unsafe links are omitted', () => {
     { type: 'heading', level: 2, text: '<script>alert(1)</script>' },
     { type: 'paragraph', text: '<img src=x onerror=alert(1)>' },
     { type: 'link', href: 'javascript:alert(1)', label: 'bad' },
-    { type: 'link', href: '/documents/', label: 'Документы' }
+    { type: 'link', href: '/\\evil.example/path', label: 'backslash' },
+    { type: 'link', href: '/\tevil.example/path', label: 'control' },
+    { type: 'link', href: '/%2f%2fevil.example/path', label: 'encoded slash' },
+    { type: 'link', href: '/%255c%255cevil.example/path', label: 'double encoded backslash' },
+    { type: 'link', href: '/documents/', label: 'Документы' },
+    { type: 'link', href: 'https://example.org/archive/a%2Fb', label: 'External HTTPS' }
   ]);
 
   assert.ok(!html.includes('<script>'));
   assert.ok(!html.includes('<img'));
   assert.ok(!html.includes('javascript:'));
+  assert.ok(!html.includes('evil.example'));
   assert.match(html, /href="\/documents\/"/);
+  assert.match(html, /href="https:\/\/example\.org\/archive\/a%2Fb"/);
+});
+
+test('unsafe rich-text hrefs are rejected at the CMS content boundary', async () => {
+  const unsafeHrefs = [
+    '//evil.example/path',
+    '/\\evil.example/path',
+    '/\nevil.example/path',
+    '/%2F%2Fevil.example/path',
+    '/%5Cevil.example/path',
+    '/%252f%252fevil.example/path'
+  ];
+
+  for (const href of unsafeHrefs) {
+    const raw = structuredClone(await loadLocalContent());
+    raw.newsItems[0].body = [{ type: 'link', href, label: 'Unsafe' }];
+    await assert.rejects(
+      loadContent({ cwd: projectRoot, adapter: async () => raw }),
+      (error) => error instanceof ContentContractError
+        && error.message.includes('newsItems[0].body[0].href')
+    );
+  }
+
+  const event = structuredClone(await loadLocalContent());
+  event.events = [{
+    id: 'unsafe-rich-text-event',
+    slug: 'unsafe-rich-text-event',
+    title: 'Unsafe rich text event',
+    href: '/events/unsafe-rich-text-event/',
+    body: [{ type: 'link', href: '/\\evil.example/path', label: 'Unsafe' }]
+  }];
+  await assert.rejects(
+    loadContent({ cwd: projectRoot, adapter: async () => event }),
+    (error) => error instanceof ContentContractError
+      && error.message.includes('events[0].body[0].href')
+  );
+
+  const sveden = structuredClone(await loadLocalContent());
+  sveden.svedenSections[0].body = [{ type: 'link', href: '/%2f%2fevil.example/path', label: 'Unsafe' }];
+  await assert.rejects(
+    loadContent({ cwd: projectRoot, adapter: async () => sveden }),
+    (error) => error instanceof ContentContractError
+      && error.message.includes('svedenSections[0].body[0].href')
+  );
 });

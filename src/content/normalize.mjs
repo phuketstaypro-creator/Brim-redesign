@@ -141,8 +141,9 @@ export function normalizeContent(input, options = {}) {
   if (site.socialLinks === undefined) site.socialLinks = [];
 
   if (typeof options.siteUrl === 'string' && options.siteUrl.trim()) {
-    site.baseUrl = options.siteUrl.trim().replace(/\/+$/, '');
+    site.baseUrl = options.siteUrl;
   }
+  if (typeof site.baseUrl === 'string') site.baseUrl = site.baseUrl.trim().replace(/\/+$/, '');
 
   const newsItems = normalizeCollection(source.newsItems ?? source.news)
     .map((item) => normalizeNestedCollections(item, ['attachments', 'gallery']));

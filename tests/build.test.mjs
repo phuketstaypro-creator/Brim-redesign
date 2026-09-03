@@ -369,6 +369,7 @@ test('official logo, favicon and hashed first-party assets are emitted', () => {
 
 test('Vercel applies security and cache headers before filesystem and localized 404 routes', () => {
   const config = JSON.parse(readFileSync(join(projectRoot, 'vercel.json'), 'utf8'));
+  assert.equal(config.cleanUrls, true, 'Vercel clean URLs must remain enabled');
   const routes = config.routes || [];
   const filesystemIndex = routes.findIndex((route) => route.handle === 'filesystem');
   assert.ok(filesystemIndex > 0, 'filesystem phase must follow response-header routes');
@@ -377,10 +378,11 @@ test('Vercel applies security and cache headers before filesystem and localized 
   assert.ok(preFilesystem.some((route) => route.headers['Content-Security-Policy']), 'security headers are missing');
   assert.ok(preFilesystem.some((route) => route.src.includes('assets/media') && /immutable/.test(route.headers['Cache-Control'] || '')), 'hashed media cache route is missing');
   assert.deepEqual(routes.slice(-3).map(({ src, status, dest }) => ({ src, status, dest })), [
-    { src: '/en(?:/.*)?', status: 404, dest: '/en/404.html' },
-    { src: '/zh(?:/.*)?', status: 404, dest: '/zh/404.html' },
-    { src: '/.*', status: 404, dest: '/404.html' }
+    { src: '/en(?:/.*)?', status: 404, dest: '/en/404' },
+    { src: '/zh(?:/.*)?', status: 404, dest: '/zh/404' },
+    { src: '/.*', status: 404, dest: '/404' }
   ]);
+  assert.ok(routes.slice(-3).every((route) => !route.dest.endsWith('.html')), 'cleanUrls 404 destinations must be extensionless');
 });
 
 test('sitemap contains 219 unique localized URLs with complete language alternates', () => {
@@ -491,6 +493,7 @@ test('json adapter drives the complete build and renders CMS collections into se
     status: 'live'
   };
   const jsonContent = structuredClone(content);
+  jsonContent.site.baseUrl = 'https://json-build.invalid/';
   jsonContent.newsItems[0].gallery = [{
     image: 'initiation043Landscape',
     alt: 'Интеграционная фотография из media registry',
@@ -521,13 +524,14 @@ test('json adapter drives the complete build and renders CMS collections into se
 
   try {
     writeFileSync(fixtureFile, `${JSON.stringify(jsonContent, null, 2)}\n`, 'utf8');
-    const result = runBuild({
+    const jsonBuildEnv = {
       ...process.env,
       CONTENT_ADAPTER: 'json',
       CMS_CONTENT_FILE: fixtureFile,
-      SITE_URL: 'https://json-build.invalid',
       ALLOW_INDEXING: 'false'
-    });
+    };
+    delete jsonBuildEnv.SITE_URL;
+    const result = runBuild(jsonBuildEnv);
     assert.equal(result.status, 0, `JSON adapter build failed:\n${buildFailure(result)}`);
 
     const eventDetail = readRoute(event.href);
@@ -569,7 +573,14 @@ test('json adapter drives the complete build and renders CMS collections into se
     assert.equal(manifest.collections.employees, jsonContent.employees.length);
     assert.equal(manifest.collections.documents, jsonContent.documents.length);
     assert.equal(manifest.routeCount, publicRoutes.length + 1);
-    assert.match(readFileSync(join(distRoot, 'sitemap.xml'), 'utf8'), /\/events\/json-build-event\//);
+    const sitemap = readFileSync(join(distRoot, 'sitemap.xml'), 'utf8');
+    const rss = readFileSync(join(distRoot, 'rss.xml'), 'utf8');
+    const robots = readFileSync(join(distRoot, 'robots.txt'), 'utf8');
+    assert.ok(linkTag(eventDetail, { rel: 'canonical', href: 'https://json-build.invalid/events/json-build-event/' }));
+    assert.match(sitemap, /<loc>https:\/\/json-build\.invalid\/events\/json-build-event\/<\/loc>/);
+    assert.match(rss, /<link>https:\/\/json-build\.invalid\/news\/<\/link>/);
+    assert.match(robots, /Sitemap: https:\/\/json-build\.invalid\/sitemap\.xml/);
+    assert.doesNotMatch(`${eventDetail}\n${sitemap}\n${rss}\n${robots}`, /https:\/\/json-build\.invalid\/\//);
   } finally {
     rmSync(fixtureFile, { force: true });
     const localEnv = { ...process.env, CONTENT_ADAPTER: 'local', ALLOW_INDEXING: 'false' };

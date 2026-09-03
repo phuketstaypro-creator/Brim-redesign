@@ -127,6 +127,39 @@ function isSafeContentLink(value) {
     && /^(?:mailto:|tel:)[^\s]+$/i.test(value);
 }
 
+const unsafeRichTextHrefCharacters = /[\\\u0000-\u001f\u007f]/;
+const encodedPathSeparator = /%(?:25)*(?:2f|5c)/i;
+
+/**
+ * Rich-text links intentionally support only root-relative public URLs and
+ * absolute HTTPS URLs. Browser URL parsers treat backslashes as slashes, so a
+ * value such as `/\evil.example` can otherwise become scheme-relative after
+ * rendering. Encoded (including repeatedly encoded) separators are rejected
+ * for the same reason at the CMS boundary.
+ */
+export function isSafeRichTextHref(value) {
+  if (!isSafeContentLink(value) || unsafeRichTextHrefCharacters.test(value)) {
+    return false;
+  }
+  if (value.startsWith('/')) return !encodedPathSeparator.test(value);
+  return isHttpUrl(value);
+}
+
+function validateRichText(value, field, issues) {
+  if (value === null || value === undefined || typeof value === 'string') return;
+  if (!Array.isArray(value)) {
+    issues.push(`${field} must be a string, rich-text block array or null`);
+    return;
+  }
+
+  value.forEach((block, index) => {
+    if (!isPlainObject(block) || block.type !== 'link') return;
+    if (!isSafeRichTextHref(block.href)) {
+      issues.push(`${field}[${index}].href must be a safe public or HTTPS URL`);
+    }
+  });
+}
+
 function validateLinkCollection(value, field, issues, { maxDepth = 0 } = {}) {
   const items = requiredArray(value, field, issues);
   if (!items) return;
@@ -544,9 +577,7 @@ export function validateContent(content) {
     requiredString(item.publishedAt, `${prefix}.publishedAt`, issues);
     validateDateFields(item, ['publishedAt', 'updatedAt'], prefix, issues);
     if (!Object.hasOwn(item, 'body')) issues.push(`${prefix}.body must be present (null is allowed)`);
-    if (item.body !== null && item.body !== undefined && typeof item.body !== 'string' && !Array.isArray(item.body)) {
-      issues.push(`${prefix}.body must be a string, rich-text block array or null`);
-    }
+    validateRichText(item.body, `${prefix}.body`, issues);
     if (typeof item.featured !== 'boolean') issues.push(`${prefix}.featured must be a boolean`);
     if (item.editorialVariant !== null && item.editorialVariant !== undefined && !editorialVariants.has(item.editorialVariant)) {
       issues.push(`${prefix}.editorialVariant is not supported`);
@@ -588,9 +619,7 @@ export function validateContent(content) {
     if (item.slug !== undefined) validateId(item.slug, `${prefix}.slug`, issues);
     validateRoute(item.href, `${prefix}.href`, issues);
     validateDateFields(item, ['publishedAt', 'updatedAt', 'startsAt', 'endsAt'], prefix, issues);
-    if (item.body !== null && item.body !== undefined && typeof item.body !== 'string' && !Array.isArray(item.body)) {
-      issues.push(`${prefix}.body must be a string, rich-text block array or null`);
-    }
+    validateRichText(item.body, `${prefix}.body`, issues);
     validateLinkedItems(item.attachments, `${prefix}.attachments`, issues);
   });
 
@@ -615,9 +644,7 @@ export function validateContent(content) {
     }
     validateLinkedItems(item.documents, `${prefix}.documents`, issues);
     validateSectionPairs(item.sections, `${prefix}.sections`, issues);
-    if (item.body !== null && item.body !== undefined && typeof item.body !== 'string' && !Array.isArray(item.body)) {
-      issues.push(`${prefix}.body must be a string, rich-text block array or null`);
-    }
+    validateRichText(item.body, `${prefix}.body`, issues);
   });
   for (const route of SVEDEN_REQUIRED_ROUTES) {
     const section = content.svedenSections.find((item) => item.href === route);
