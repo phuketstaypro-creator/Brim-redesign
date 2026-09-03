@@ -1,8 +1,9 @@
 import { esc } from './components.mjs';
+import { localHref } from '../i18n/render-context.mjs';
 
 function safeHref(value) {
   const href = String(value || '');
-  if (href.startsWith('/') && !href.startsWith('//')) return href;
+  if (href.startsWith('/') && !href.startsWith('//')) return localHref(href);
   try {
     const url = new URL(href);
     return url.protocol === 'https:' ? url.href : null;

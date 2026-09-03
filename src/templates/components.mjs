@@ -1,3 +1,5 @@
+import { isCurrentRoute, localHref, message } from '../i18n/render-context.mjs';
+
 export const esc = (value) => String(value ?? '').replace(/[&<>"']/g, (character) => ({
   '&': '&amp;',
   '<': '&lt;',
@@ -56,9 +58,9 @@ export function sectionHead(index, label, title, lead = '') {
 }
 
 export function breadcrumbs(items) {
-  return `<nav class="breadcrumbs" aria-label="Хлебные крошки"><div class="wrap"><ol>${items.map((item, index) => {
+  return `<nav class="breadcrumbs" aria-label="${esc(message('breadcrumbs'))}"><div class="wrap"><ol>${items.map((item, index) => {
     const current = index === items.length - 1;
-    return `<li>${current ? `<span aria-current="page">${esc(item.title)}</span>` : `<a href="${esc(item.href)}">${esc(item.title)}</a>`}</li>`;
+    return `<li>${current ? `<span aria-current="page">${esc(item.title)}</span>` : `<a href="${esc(localHref(item.href))}">${esc(item.title)}</a>`}</li>`;
   }).join('')}</ol></div></nav>`;
 }
 
@@ -70,7 +72,7 @@ export function pageHero(kicker, title, description, mediaId) {
 }
 
 function currentAttribute(route, href) {
-  return route && href && route === href ? ' aria-current="page"' : '';
+  return isCurrentRoute(route, href) ? ' aria-current="page"' : '';
 }
 
 function groupedNavigationItems(items = []) {
@@ -83,32 +85,32 @@ function groupedNavigationItems(items = []) {
   return groups;
 }
 
-export function sideNavigation(items = [], { title = 'Разделы сайта', route = '' } = {}) {
-  return `<aside class="side-card"><nav aria-label="${esc(title)}"><h2>${esc(title)}</h2>${items.map((item) => `<a href="${esc(item.href)}"${currentAttribute(route, item.href)}>${esc(item.label)}</a>`).join('')}</nav></aside>`;
+export function sideNavigation(items = [], { title = message('siteSections'), route = '' } = {}) {
+  return `<aside class="side-card"><nav aria-label="${esc(title)}"><h2>${esc(title)}</h2>${items.map((item) => `<a href="${esc(localHref(item.href))}"${currentAttribute(route, item.href)}>${esc(item.label)}</a>`).join('')}</nav></aside>`;
 }
 
 export function disclosureDirectory(svedenSections = [], institutionalNavigation = [], route = '') {
   const mandatory = svedenSections.filter((section) => section.group === 'mandatory');
   const legacy = svedenSections.filter((section) => section.group === 'legacy');
-  const links = (items) => `<ul>${items.map((item) => `<li><a href="${esc(item.href)}"${currentAttribute(route, item.href)}>${esc(item.title || item.label)}</a></li>`).join('')}</ul>`;
+  const links = (items) => `<ul>${items.map((item) => `<li><a href="${esc(localHref(item.href))}"${currentAttribute(route, item.href)}>${esc(item.title || item.label)}</a></li>`).join('')}</ul>`;
   const supplemental = [
     ...institutionalNavigation.map((item) => ({ ...item, title: item.label })),
     ...legacy
   ];
   const supplementalOpen = supplemental.some((item) => item.href === route) ? ' open' : '';
 
-  return `<aside class="side-card disclosure-directory"><nav aria-label="Разделы сведений"><h2>Сведения об организации</h2><a class="directory-overview" href="/sveden/"${currentAttribute(route, '/sveden/')}>Все сведения</a><details open><summary>Обязательные подразделы</summary>${links(mandatory)}</details><details${supplementalOpen}><summary>Сервисы и открытость</summary>${links(supplemental)}</details></nav></aside>`;
+  return `<aside class="side-card disclosure-directory"><nav aria-label="${esc(message('disclosureSections'))}"><h2>${esc(message('organizationInformation'))}</h2><a class="directory-overview" href="${esc(localHref('/sveden/'))}"${currentAttribute(route, '/sveden/')}>${esc(message('allInformation'))}</a><details open><summary>${esc(message('mandatorySubsections'))}</summary>${links(mandatory)}</details><details${supplementalOpen}><summary>${esc(message('servicesTransparency'))}</summary>${links(supplemental)}</details></nav></aside>`;
 }
 
 export function navigationDirectory(items = [], route = '') {
   return `<div class="site-map-grid">${items.map((item, index) => {
     const children = Array.isArray(item.children) ? item.children : [];
     const heading = item.href
-      ? `<h2><a href="${esc(item.href)}"${currentAttribute(route, item.href)}>${esc(item.label)}</a></h2>`
+      ? `<h2><a href="${esc(localHref(item.href))}"${currentAttribute(route, item.href)}>${esc(item.label)}</a></h2>`
       : `<h2>${esc(item.label)}</h2>`;
     if (!children.length) return `<section class="site-map-section"><span class="site-map-index">${String(index + 1).padStart(2, '0')}</span>${heading}</section>`;
     const groups = [...groupedNavigationItems(children).entries()];
-    return `<section class="site-map-section"><span class="site-map-index">${String(index + 1).padStart(2, '0')}</span>${heading}<div class="site-map-groups">${groups.map(([group, links]) => `<div>${group ? `<h3>${esc(group)}</h3>` : ''}<ul>${links.map((link) => `<li><a href="${esc(link.href)}"${currentAttribute(route, link.href)}>${esc(link.label)}</a></li>`).join('')}</ul></div>`).join('')}</div></section>`;
+    return `<section class="site-map-section"><span class="site-map-index">${String(index + 1).padStart(2, '0')}</span>${heading}<div class="site-map-groups">${groups.map(([group, links]) => `<div>${group ? `<h3>${esc(group)}</h3>` : ''}<ul>${links.map((link) => `<li><a href="${esc(localHref(link.href))}"${currentAttribute(route, link.href)}>${esc(link.label)}</a></li>`).join('')}</ul></div>`).join('')}</div></section>`;
   }).join('')}</div>`;
 }
 
@@ -150,24 +152,24 @@ export function editorialNews(items, context = 'page') {
     const classes = automaticEditorialVariant(item);
     const noMedia = item.coverImage || item.image ? '' : ' is-no-media';
     const headingId = `news-${esc(item.slug)}-${index}`;
-    return `<article class="editorial-card ${classes}${noMedia}" data-news-card data-cms-item="news"><a href="${esc(item.href)}" aria-labelledby="${headingId}">${editorialMedia(item, index)}<div class="editorial-copy"><div class="editorial-meta"><span data-cms-field="category">${esc(item.category)}</span><time datetime="${esc(item.publishedAt || '')}" data-cms-field="date">${esc(item.date || item.publishedAt)}</time></div><h3 id="${headingId}" data-cms-field="title">${esc(item.title)}</h3><p data-cms-field="excerpt">${esc(item.excerpt)}</p><span class="editorial-arrow" aria-hidden="true">→</span></div></a></article>`;
+    return `<article class="editorial-card ${classes}${noMedia}" data-news-card data-cms-item="news"><a href="${esc(localHref(item.href))}" aria-labelledby="${headingId}">${editorialMedia(item, index)}<div class="editorial-copy"><div class="editorial-meta"><span data-cms-field="category">${esc(item.category)}</span><time datetime="${esc(item.publishedAt || '')}" data-cms-field="date">${esc(item.date || item.publishedAt)}</time></div><h3 id="${headingId}" data-cms-field="title">${esc(item.title)}</h3><p data-cms-field="excerpt">${esc(item.excerpt)}</p><span class="editorial-arrow" aria-hidden="true">→</span></div></a></article>`;
   }).join('')}</div>`;
 }
 
 export function gallery(items = []) {
-  if (!items.length) return '<p class="legal-note">Фотоматериалы подключаются из утверждённого медиакаталога.</p>';
+  if (!items.length) return `<p class="legal-note">${esc(message('approvedMediaPending'))}</p>`;
   return `<div class="gallery-grid">${items.map((item) => `<figure class="gallery-item${item.compact ? ' gallery-item-small' : ''}">${image(item.image, item.alt, { sizes: item.compact ? '(max-width: 860px) 100vw, 35vw' : '(max-width: 860px) 100vw, 65vw' })}<figcaption>${esc(item.caption)}</figcaption></figure>`).join('')}</div>`;
 }
 
 function programVisual(program, sizes) {
-  if (!program.image) return '<div class="program-media-empty" aria-hidden="true"><span>БРХК</span></div>';
+  if (!program.image) return `<div class="program-media-empty" aria-hidden="true"><span>${esc(message('collegeAbbreviation'))}</span></div>`;
   return image(program.image, program.imageAlt, { cmsField: 'image', sizes });
 }
 
 export function programCard(program) {
-  return `<a class="program-card" href="${esc(program.href)}" data-cms-item="program">${programVisual(program, '(max-width: 860px) 100vw, 50vw')}<div class="program-body"><div class="program-meta"><span>${esc(program.code)}</span><span>${esc(program.type)}</span></div><h3 data-cms-field="title">${esc(program.title)}</h3><p data-cms-field="excerpt">${esc(program.description)}</p></div></a>`;
+  return `<a class="program-card" href="${esc(localHref(program.href))}" data-cms-item="program">${programVisual(program, '(max-width: 860px) 100vw, 50vw')}<div class="program-body"><div class="program-meta"><span>${esc(program.code)}</span><span>${esc(program.type)}</span></div><h3 data-cms-field="title">${esc(program.title)}</h3><p data-cms-field="excerpt">${esc(program.description)}</p></div></a>`;
 }
 
 export function educationProgram(program) {
-  return `<a class="education-program" href="${esc(program.href)}" data-cms-item="program"><div class="education-program-media">${programVisual(program, '(max-width: 860px) 100vw, 50vw')}</div><div class="education-program-copy"><div class="program-meta"><span>${esc(program.code)}</span><span>${esc(program.type)}</span></div><h3 data-cms-field="title">${esc(program.title)}</h3><p data-cms-field="excerpt">${esc(program.description)}</p><strong>Открыть программу →</strong></div></a>`;
+  return `<a class="education-program" href="${esc(localHref(program.href))}" data-cms-item="program"><div class="education-program-media">${programVisual(program, '(max-width: 860px) 100vw, 50vw')}</div><div class="education-program-copy"><div class="program-meta"><span>${esc(program.code)}</span><span>${esc(program.type)}</span></div><h3 data-cms-field="title">${esc(program.title)}</h3><p data-cms-field="excerpt">${esc(program.description)}</p><strong>${esc(message('openProgram'))}</strong></div></a>`;
 }

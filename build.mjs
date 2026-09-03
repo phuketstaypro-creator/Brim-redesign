@@ -5,6 +5,10 @@ import { loadContent } from './src/content/load-content.mjs';
 import { materializeMedia } from './src/content/media.mjs';
 import { REQUIRED_ROUTES, missingRequiredRoutes } from './src/content/required-routes.mjs';
 import { assertIndexableMediaRights } from './src/content/rights.mjs';
+import { LOCALE_IDS, localeConfig } from './src/i18n/config.mjs';
+import { localizeContent } from './src/i18n/localize.mjs';
+import { configureRenderLocale } from './src/i18n/render-context.mjs';
+import { publicRoute, routeAlternates } from './src/i18n/routing.mjs';
 import { configureMediaRegistry, xml } from './src/templates/components.mjs';
 import { renderLayout } from './src/templates/layout.mjs';
 import {
@@ -44,6 +48,11 @@ function routeFile(route) {
   return join(route.replace(/^\/+|\/+$/g, ''), 'index.html');
 }
 
+function localeFile(locale, filename) {
+  const directory = localeConfig(locale).prefix.replace(/^\//, '');
+  return directory ? join(directory, filename) : filename;
+}
+
 function assertStableAssets() {
   const required = [
     'assets/images/brhk-logo-full.png',
@@ -56,24 +65,88 @@ function assertStableAssets() {
   if (missing.length) throw new Error(`Missing required official assets:\n${missing.join('\n')}`);
 }
 
+function createRouteModels(content, site) {
+  const { pages, programs, newsItems, events, employees, documents, svedenSections } = content;
+  return [
+    renderHome({ site, programs, newsItems }),
+    renderEducation({ site, programs, page: pages['/education/'] }),
+    renderNews({ site, newsItems, page: pages['/news/'] }),
+    ...Object.entries(pages)
+      .filter(([route]) => !['/education/', '/news/'].includes(route))
+      .map(([route, page]) => renderGeneric({ route, page, site, svedenSections, documents, events, employees })),
+    ...newsItems.map((item) => renderNewsArticle(item, site)),
+    ...events.map((item) => renderEventArticle(item, site))
+  ];
+}
+
+function assertRouteModels(routeModels, locale) {
+  const logicalRoutes = routeModels.map((model) => model.route);
+  const duplicateRoutes = logicalRoutes.filter((route, index) => logicalRoutes.indexOf(route) !== index);
+  if (duplicateRoutes.length) throw new Error(`${locale}: duplicate routes: ${[...new Set(duplicateRoutes)].join(', ')}`);
+  const missingRoutes = missingRequiredRoutes(logicalRoutes);
+  if (missingRoutes.length) throw new Error(`${locale}: required routes were not rendered:\n${missingRoutes.join('\n')}`);
+  return logicalRoutes;
+}
+
+function searchIndexFor(content, site, locale) {
+  const { pages, newsItems, events } = content;
+  const messages = localeConfig(locale).messages;
+  return [
+    { title: messages.home, url: publicRoute(locale, '/'), description: site.description },
+    ...Object.entries(pages).map(([url, page]) => ({ title: page.title, url: publicRoute(locale, url), description: page.description })),
+    ...newsItems.map((item) => ({ title: item.title, url: publicRoute(locale, item.href), description: `${item.category}. ${item.excerpt}` })),
+    ...events.filter((item) => item.href).map((item) => ({ title: item.title, url: publicRoute(locale, item.href), description: item.description || '' }))
+  ];
+}
+
+function renderRss(content, site, locale) {
+  const messages = localeConfig(locale).messages;
+  const rssItems = [...content.newsItems]
+    .sort((a, b) => String(b.publishedAt).localeCompare(String(a.publishedAt)))
+    .map((item) => {
+      const publishedAt = /^\d{4}-\d{2}-\d{2}$/.test(item.publishedAt)
+        ? new Date(`${item.publishedAt}T00:00:00+08:00`)
+        : new Date(item.publishedAt);
+      const href = `${site.baseUrl}${publicRoute(locale, item.href)}`;
+      return `    <item><title>${xml(item.title)}</title><link>${xml(href)}</link><guid>${xml(href)}</guid><description>${xml(item.excerpt)}</description><pubDate>${publishedAt.toUTCString()}</pubDate></item>`;
+    })
+    .join('\n');
+  return `<?xml version="1.0" encoding="UTF-8"?>\n<rss version="2.0"><channel><title>${xml(messages.rssTitle)}</title><link>${xml(`${site.baseUrl}${publicRoute(locale, '/news/')}`)}</link><description>${xml(messages.rssDescription)}</description><language>${xml(localeConfig(locale).htmlLang)}</language>\n${rssItems}\n</channel></rss>\n`;
+}
+
+function manifestFor(site, locale) {
+  const config = localeConfig(locale);
+  return `${JSON.stringify({
+    name: site.name,
+    short_name: site.shortName,
+    lang: config.htmlLang,
+    start_url: publicRoute(locale, '/'),
+    display: 'standalone',
+    background_color: '#f1ece3',
+    theme_color: site.themeColor,
+    icons: [
+      { src: '/assets/icons/icon-192.png', sizes: '192x192', type: 'image/png' },
+      { src: '/assets/icons/icon-512.png', sizes: '512x512', type: 'image/png' }
+    ]
+  }, null, 2)}\n`;
+}
+
 rmSync(distRoot, { recursive: true, force: true });
 mkdirSync(assetsRoot, { recursive: true });
 assertStableAssets();
 cpSync(publicRoot, distRoot, { recursive: true });
 
-const content = await loadContent({ env: process.env, cwd: projectRoot });
-const { pages, programs, newsItems, events, employees, documents, svedenSections } = content;
+const sourceContent = await loadContent({ env: process.env, cwd: projectRoot });
+const adapterName = String(process.env.CONTENT_ADAPTER || 'local').toLowerCase();
+const requestedLocales = String(process.env.CONTENT_LOCALES || '')
+  .split(',')
+  .map((locale) => locale.trim().toLowerCase())
+  .filter(Boolean);
+const buildLocaleIds = requestedLocales.length ? [...new Set(requestedLocales)] : adapterName === 'local' ? [...LOCALE_IDS] : ['ru'];
+const unsupportedLocales = buildLocaleIds.filter((locale) => !LOCALE_IDS.includes(locale));
+if (unsupportedLocales.length) throw new Error(`Unsupported CONTENT_LOCALES: ${unsupportedLocales.join(', ')}`);
 const allowIndexing = String(process.env.ALLOW_INDEXING || '').toLowerCase() === 'true';
-assertIndexableMediaRights(content.media, { allowIndexing });
-const site = {
-  ...content.site,
-  canonicalBase: content.site.baseUrl,
-  staging: !allowIndexing
-};
-
-const mediaRegistry = materializeMedia(content.media, { publicRoot, distRoot });
-configureMediaRegistry(mediaRegistry);
-site.socialImage = mediaRegistry.stageHero?.src || mediaRegistry.stage?.src;
+assertIndexableMediaRights(sourceContent.media, { allowIndexing });
 
 const css = `${readFileSync(join(projectRoot, 'src/styles/main.css'), 'utf8')}\n${readFileSync(join(projectRoot, 'src/styles/editorial.css'), 'utf8')}`;
 const client = readFileSync(join(projectRoot, 'src/client/app.js'), 'utf8');
@@ -82,91 +155,103 @@ const jsHref = `/assets/site.${hash(client)}.js`;
 write(cssHref.slice(1), css);
 write(jsHref.slice(1), client);
 
-const routeModels = [
-  renderHome({ site, programs, newsItems }),
-  renderEducation({ site, programs, page: pages['/education/'] }),
-  renderNews({ site, newsItems, page: pages['/news/'] }),
-  ...Object.entries(pages)
-    .filter(([route]) => !['/education/', '/news/'].includes(route))
-    .map(([route, page]) => renderGeneric({ route, page, site, svedenSections, documents, events, employees })),
-  ...newsItems.map((item) => renderNewsArticle(item, site)),
-  ...events.map((item) => renderEventArticle(item, site))
-];
+const localeBuilds = [];
+let manifestMediaRegistry = null;
+const renderedPublicPaths = new Set();
+const locale404Documents = new Map();
 
-const routes = routeModels.map((model) => model.route);
-const duplicateRoutes = routes.filter((route, index) => routes.indexOf(route) !== index);
-if (duplicateRoutes.length) throw new Error(`Duplicate routes: ${[...new Set(duplicateRoutes)].join(', ')}`);
-const missingRoutes = missingRequiredRoutes(routes);
-if (missingRoutes.length) throw new Error(`Required routes were not rendered:\n${missingRoutes.join('\n')}`);
+for (const locale of buildLocaleIds) {
+  configureRenderLocale(locale, buildLocaleIds);
+  const content = localizeContent(sourceContent, locale);
+  const site = {
+    ...content.site,
+    canonicalBase: content.site.baseUrl,
+    staging: !allowIndexing
+  };
+  const mediaRegistry = materializeMedia(content.media, { publicRoot, distRoot });
+  configureMediaRegistry(mediaRegistry);
+  if (!manifestMediaRegistry) manifestMediaRegistry = mediaRegistry;
+  site.socialImage = mediaRegistry.stageHero?.src || mediaRegistry.stage?.src;
 
-const rendered = [];
-for (const model of routeModels) {
-  const html = renderLayout({ site, ...model, cssHref, jsHref });
-  const h1Count = (html.match(/<h1(?:\s|>)/g) || []).length;
-  if (h1Count !== 1) throw new Error(`${model.route}: expected one h1, received ${h1Count}`);
-  if (html.includes('raw.githubusercontent.com') || html.includes('<div id="app"></div>')) {
-    throw new Error(`${model.route}: runtime-loader artifact detected`);
+  const routeModels = createRouteModels(content, site);
+  const logicalRoutes = assertRouteModels(routeModels, locale);
+  const routes = [];
+
+  for (const model of routeModels) {
+    const publicPath = publicRoute(locale, model.route);
+    if (renderedPublicPaths.has(publicPath)) {
+      throw new Error(`${locale}: localized public route is duplicated: ${publicPath}`);
+    }
+    renderedPublicPaths.add(publicPath);
+    const html = renderLayout({ site, ...model, cssHref, jsHref });
+    const h1Count = (html.match(/<h1(?:\s|>)/g) || []).length;
+    if (h1Count !== 1) throw new Error(`${publicPath}: expected one h1, received ${h1Count}`);
+    if (html.includes('raw.githubusercontent.com') || html.includes('<div id="app"></div>')) {
+      throw new Error(`${publicPath}: runtime-loader artifact detected`);
+    }
+    const mainMarkup = html.match(/<main\b[\s\S]*?<\/main>/)?.[0] || '';
+    if (locale !== 'ru' && /[А-Яа-яЁё]/.test(mainMarkup)) {
+      throw new Error(`${publicPath}: untranslated Cyrillic text remains in main content`);
+    }
+    write(routeFile(publicPath), html);
+    routes.push(publicPath);
   }
-  write(routeFile(model.route), html);
-  rendered.push({ ...model, html });
+
+  const notFound = renderNotFound(site);
+  const notFoundHtml = renderLayout({ site, ...notFound, cssHref, jsHref });
+  write(localeFile(locale, '404.html'), notFoundHtml);
+  locale404Documents.set(locale, notFoundHtml);
+  write(localeFile(locale, 'search-index.json'), `${JSON.stringify(searchIndexFor(content, site, locale), null, 2)}\n`);
+  write(localeFile(locale, 'rss.xml'), renderRss(content, site, locale));
+  write(localeFile(locale, 'manifest.webmanifest'), manifestFor(site, locale));
+  localeBuilds.push({ locale, content, site, routeModels, logicalRoutes, routes });
 }
 
-const notFound = renderNotFound(site);
-write('404.html', renderLayout({ site, ...notFound, cssHref, jsHref }));
+// Vercel and the local dev server have stable locale-aware fallback targets.
+// When a subset is built, unavailable locales use the first built noindex 404.
+const fallbackNotFoundHtml = locale404Documents.values().next().value;
+for (const locale of LOCALE_IDS) {
+  if (!locale404Documents.has(locale)) write(localeFile(locale, '404.html'), fallbackNotFoundHtml);
+}
 
-const searchIndex = [
-  { title: 'Главная', url: '/', description: site.description },
-  ...Object.entries(pages).map(([url, page]) => ({ title: page.title, url, description: page.description })),
-  ...newsItems.map((item) => ({ title: item.title, url: item.href, description: `${item.category}. ${item.excerpt}` })),
-  ...events.filter((item) => item.href).map((item) => ({ title: item.title, url: item.href, description: item.description || '' }))
-];
-write('search-index.json', `${JSON.stringify(searchIndex, null, 2)}\n`);
+const referenceLogicalRoutes = localeBuilds[0].logicalRoutes;
+for (const build of localeBuilds.slice(1)) {
+  const mismatch = referenceLogicalRoutes.filter((route) => !build.logicalRoutes.includes(route))
+    .concat(build.logicalRoutes.filter((route) => !referenceLogicalRoutes.includes(route)));
+  if (mismatch.length) throw new Error(`${build.locale}: route parity failed: ${[...new Set(mismatch)].join(', ')}`);
+}
 
-const sitemap = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${routes.map((route) => `  <url><loc>${xml(`${site.baseUrl}${route}`)}</loc></url>`).join('\n')}\n</urlset>\n`;
-write('sitemap.xml', sitemap);
+const baseUrl = localeBuilds[0].site.baseUrl;
+const sitemapEntries = referenceLogicalRoutes.flatMap((logicalRoute) => routeAlternates(logicalRoute).filter((item) => buildLocaleIds.includes(item.locale)).map((alternate) => {
+  const alternateLinks = routeAlternates(logicalRoute).filter((item) => buildLocaleIds.includes(item.locale))
+    .map((item) => `    <xhtml:link rel="alternate" hreflang="${xml(item.hreflang)}" href="${xml(`${baseUrl}${item.href}`)}"/>`)
+    .concat(buildLocaleIds.includes('ru') ? `    <xhtml:link rel="alternate" hreflang="x-default" href="${xml(`${baseUrl}${publicRoute('ru', logicalRoute)}`)}"/>` : [])
+    .join('\n');
+  return `  <url><loc>${xml(`${baseUrl}${alternate.href}`)}</loc>\n${alternateLinks}\n  </url>`;
+}));
+write('sitemap.xml', `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">\n${sitemapEntries.join('\n')}\n</urlset>\n`);
 
-const rssItems = [...newsItems]
-  .sort((a, b) => String(b.publishedAt).localeCompare(String(a.publishedAt)))
-  .map((item) => {
-    const publishedAt = /^\d{4}-\d{2}-\d{2}$/.test(item.publishedAt)
-      ? new Date(`${item.publishedAt}T00:00:00+08:00`)
-      : new Date(item.publishedAt);
-    return `    <item><title>${xml(item.title)}</title><link>${xml(`${site.baseUrl}${item.href}`)}</link><guid>${xml(`${site.baseUrl}${item.href}`)}</guid><description>${xml(item.excerpt)}</description><pubDate>${publishedAt.toUTCString()}</pubDate></item>`;
-  })
-  .join('\n');
-write('rss.xml', `<?xml version="1.0" encoding="UTF-8"?>\n<rss version="2.0"><channel><title>Новости БРХК</title><link>${xml(`${site.baseUrl}/news/`)}</link><description>Краткая лента публикаций БРХК.</description>\n${rssItems}\n</channel></rss>\n`);
+write('robots.txt', `User-agent: *\n${allowIndexing ? 'Allow: /' : 'Disallow: /'}\nSitemap: ${baseUrl}/sitemap.xml\n`);
 
-write('robots.txt', `User-agent: *\n${allowIndexing ? 'Allow: /' : 'Disallow: /'}\nSitemap: ${site.baseUrl}/sitemap.xml\n`);
-write('manifest.webmanifest', `${JSON.stringify({
-  name: site.name,
-  short_name: site.shortName,
-  lang: site.locale,
-  start_url: '/',
-  display: 'standalone',
-  background_color: '#f1ece3',
-  theme_color: site.themeColor,
-  icons: [
-    { src: '/assets/icons/icon-192.png', sizes: '192x192', type: 'image/png' },
-    { src: '/assets/icons/icon-512.png', sizes: '512x512', type: 'image/png' }
-  ]
-}, null, 2)}\n`);
-
+const totalRouteCount = localeBuilds.reduce((count, build) => count + build.routes.length, 0);
 write('content-manifest.json', `${JSON.stringify({
-  schemaVersion: content.schemaVersion,
-  adapter: String(process.env.CONTENT_ADAPTER || 'local').toLowerCase(),
-  routeCount: routes.length,
+  schemaVersion: sourceContent.schemaVersion,
+  adapter: adapterName,
+  locales: buildLocaleIds,
+  logicalRouteCount: referenceLogicalRoutes.length,
+  routeCount: totalRouteCount,
   requiredRoutes: REQUIRED_ROUTES,
   collections: {
-    pages: Object.keys(pages).length,
-    programs: programs.length,
-    news: newsItems.length,
-    events: events.length,
-    employees: employees.length,
-    documents: documents.length,
-    sveden: svedenSections.length,
-    media: content.media.length
+    pages: Object.keys(sourceContent.pages).length,
+    programs: sourceContent.programs.length,
+    news: sourceContent.newsItems.length,
+    events: sourceContent.events.length,
+    employees: sourceContent.employees.length,
+    documents: sourceContent.documents.length,
+    sveden: sourceContent.svedenSections.length,
+    media: sourceContent.media.length
   },
-  media: Object.values(mediaRegistry).map((asset) => ({
+  media: Object.values(manifestMediaRegistry).map((asset) => ({
     id: asset.id,
     src: asset.src,
     width: asset.width,
@@ -178,5 +263,5 @@ write('content-manifest.json', `${JSON.stringify({
   }))
 }, null, 2)}\n`);
 
-console.log(`Built ${routes.length} filled HTML routes, 404, sitemap, RSS and search index into dist/`);
-console.log(`Content: ${content.schemaVersion}; media: ${Object.keys(mediaRegistry).length}; assets: ${cssHref}, ${jsHref}`);
+console.log(`Built ${totalRouteCount} filled HTML routes (${referenceLogicalRoutes.length} × ${buildLocaleIds.length} locales), localized 404, sitemap, RSS and search indexes into dist/`);
+console.log(`Content: ${sourceContent.schemaVersion}; media: ${Object.keys(manifestMediaRegistry).length}; assets: ${cssHref}, ${jsHref}`);

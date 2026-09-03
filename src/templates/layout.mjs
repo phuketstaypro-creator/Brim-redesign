@@ -1,8 +1,10 @@
 import { esc } from './components.mjs';
+import { currentAvailableLocales, currentLocale, isCurrentRoute, localHref, message } from '../i18n/render-context.mjs';
+import { normalizeLogicalRoute, publicRoute, routeAlternates } from '../i18n/routing.mjs';
 
 function activeAttribute(route, href) {
   if (!route || !href || !href.startsWith('/')) return '';
-  return route === href ? ' aria-current="page"' : '';
+  return isCurrentRoute(route, href) ? ' aria-current="page"' : '';
 }
 
 function asArray(value) {
@@ -36,10 +38,6 @@ function linkItems(items) {
   });
 }
 
-function isCurrentRoute(route, href) {
-  return Boolean(route && href && href.startsWith('/') && route === href);
-}
-
 function navigationItems(items) {
   return asArray(items).flatMap((item) => {
     const label = asText(item?.label);
@@ -70,7 +68,7 @@ function childNavigation(children, route, itemIndex) {
       ? `<span class="nav-panel-label" id="${labelId}">${esc(group.label)}</span>`
       : '';
     const groupAttributes = group.label ? ` role="group" aria-labelledby="${labelId}"` : '';
-    const links = group.links.map(({ href, label: childLabel }) => `<li><a href="${esc(href)}"${activeAttribute(route, href)} data-nav-child>${esc(childLabel)}</a></li>`).join('');
+    const links = group.links.map(({ href, label: childLabel }) => `<li><a href="${esc(localHref(href))}"${activeAttribute(route, href)} data-nav-child>${esc(childLabel)}</a></li>`).join('');
     return `<div class="nav-panel-group"${groupAttributes}>${label}<ul class="nav-panel-list">${links}</ul></div>`;
   }).join('');
 }
@@ -79,14 +77,14 @@ function navigation(items, route) {
   return navigationItems(items).map(({ href, label, cta, children }, itemIndex) => {
     if (!children.length) {
       const className = cta ? ' class="nav-cta"' : '';
-      return `<li class="nav-item"><a${className} href="${esc(href)}"${activeAttribute(route, href)}>${esc(label)}</a></li>`;
+      return `<li class="nav-item"><a${className} href="${esc(localHref(href))}"${activeAttribute(route, href)}>${esc(label)}</a></li>`;
     }
 
     const groupIsActive = isCurrentRoute(route, href) || children.some((child) => isCurrentRoute(route, child.href));
     const activeClass = groupIsActive ? ' is-active' : '';
     const largeClass = children.length >= 8 ? ' is-large' : '';
     const overview = href
-      ? `<a class="nav-overview" href="${esc(href)}"${activeAttribute(route, href)}><span>${esc(label)}</span><span aria-hidden="true">→</span></a>`
+      ? `<a class="nav-overview" href="${esc(localHref(href))}"${activeAttribute(route, href)}><span>${esc(label)}</span><span aria-hidden="true">→</span></a>`
       : '';
     return `<li class="nav-item nav-item-group${activeClass}"><details class="nav-disclosure${largeClass}${activeClass}" data-nav-disclosure><summary data-nav-summary><span>${esc(label)}</span><span class="nav-summary-icon" aria-hidden="true"></span></summary><div class="nav-panel" data-nav-panel><div class="nav-panel-inner">${overview}<div class="nav-panel-groups">${childNavigation(children, route, itemIndex)}</div></div></div></details></li>`;
   }).join('');
@@ -95,7 +93,7 @@ function navigation(items, route) {
 function inlineLinks(items) {
   return linkItems(items).map(({ href, label }) => {
     const external = /^https?:\/\//i.test(href) ? ' rel="external"' : '';
-    return `<a href="${esc(href)}"${external}>${esc(label)}</a>`;
+    return `<a href="${esc(localHref(href))}"${external}>${esc(label)}</a>`;
   }).join('');
 }
 
@@ -114,6 +112,16 @@ function usefulLinkCards(items) {
     const accent = index === 0 ? ' is-accent' : '';
     return `<li><a class="useful-link-card${accent}" href="${esc(href)}" rel="external"><span class="useful-link-meta">${number}</span><strong class="useful-link-title">${esc(label)}</strong><span class="useful-link-destination"><span>${esc(hostname)}</span><span class="useful-link-arrow" aria-hidden="true">↗</span></span></a></li>`;
   }).join('');
+}
+
+function languageNavigation(logicalRoute) {
+  const locale = currentLocale();
+  const available = currentAvailableLocales();
+  const links = routeAlternates(logicalRoute).filter((alternate) => available.includes(alternate.locale)).map((alternate) => {
+    const current = alternate.locale === locale.id ? ' aria-current="page"' : '';
+    return `<li><a href="${esc(alternate.href)}" hreflang="${esc(alternate.hreflang)}" lang="${esc(alternate.htmlLang)}"${current}>${esc(alternate.nativeName)}</a></li>`;
+  }).join('');
+  return `<li class="nav-item nav-language-item"><details class="nav-disclosure language-disclosure" data-nav-disclosure><summary data-nav-summary><span class="language-current" aria-hidden="true">${esc(locale.shortLabel)}</span><span class="visually-hidden">${esc(message('currentLanguage'))}</span><span class="nav-summary-icon" aria-hidden="true"></span></summary><div class="nav-panel language-panel" data-nav-panel><div class="nav-panel-inner"><ul class="language-list" aria-label="${esc(message('availableLanguages'))}">${links}</ul></div></div></details></li>`;
 }
 
 function logoImage(logo, className, alt) {
@@ -140,8 +148,11 @@ function contactDetails(contacts) {
 
 export function renderLayout({ site, route, title, description, content, cssHref, jsHref, image, type = 'website', noindex = false }) {
   const siteData = site || {};
+  const locale = currentLocale();
+  const availableLocales = currentAvailableLocales();
   const canonicalBase = safeUrl(siteData.canonicalBase || siteData.baseUrl);
-  const safeRoute = safeUrl(route) || '/';
+  const logicalRoute = normalizeLogicalRoute(safeUrl(route) || '/');
+  const safeRoute = publicRoute(locale.id, logicalRoute);
   const canonical = absoluteUrl(canonicalBase, safeRoute);
   const suppliedTitle = asText(title);
   const defaultTitle = asText(siteData.defaultTitle || siteData.title || siteData.name);
@@ -153,8 +164,8 @@ export function renderLayout({ site, route, title, description, content, cssHref
   const socialImage = absoluteUrl(canonicalBase, image || siteData.socialImage || siteData.assets?.stage?.src || siteData.assets?.logo?.src);
   const logo = siteData.assets?.logo || {};
   const brandLabel = asText(siteData.shortName || siteData.name);
-  const brandAriaLabel = brandLabel ? `${brandLabel} — на главную` : 'На главную';
-  const primaryNavigation = navigation(siteData.navigation, safeRoute);
+  const brandAriaLabel = brandLabel ? `${brandLabel} — ${message('toHome')}` : message('homeAria');
+  const primaryNavigation = `${navigation(siteData.navigation, safeRoute)}${languageNavigation(logicalRoute)}`;
   const utilityNavigation = inlineLinks(siteData.utilityNavigation);
   const quickLinks = inlineLinks(siteData.quickLinks);
   const usefulLinks = usefulLinkCards(siteData.usefulLinks);
@@ -164,16 +175,25 @@ export function renderLayout({ site, route, title, description, content, cssHref
   const socialNavigation = inlineLinks(siteData.socialLinks);
   const footerStatus = asText(siteData.footer?.status);
   const footerDisclaimer = asText(siteData.footer?.disclaimer);
+  const alternates = routeAlternates(logicalRoute).filter((alternate) => availableLocales.includes(alternate.locale));
+  const russianAlternate = alternates.find((item) => item.locale === 'ru');
+  const alternateLinks = [
+    ...alternates.map((alternate) => `<link rel="alternate" hreflang="${esc(alternate.hreflang)}" href="${esc(absoluteUrl(canonicalBase, alternate.href))}">`),
+    ...(russianAlternate ? [`<link rel="alternate" hreflang="x-default" href="${esc(absoluteUrl(canonicalBase, russianAlternate.href))}">`] : [])
+  ].join('\n  ');
+  const alternateOgLocales = alternates.filter((item) => item.locale !== locale.id).map((item) => `<meta property="og:locale:alternate" content="${esc(item.ogLocale)}">`).join('\n  ');
+  const translationNotice = asText(message('translationNotice'));
 
   return `<!doctype html>
-<html lang="${esc(siteData.locale || 'ru')}" data-size="normal" data-theme="normal" data-images="on" data-spacing="normal" data-motion="on">
+<html lang="${esc(locale.htmlLang)}" data-size="normal" data-theme="normal" data-images="on" data-spacing="normal" data-motion="on">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="${esc(siteData.themeColor)}">
   <meta name="description" content="${esc(description)}">
   <meta name="robots" content="${robots}">
-  <meta property="og:locale" content="ru_RU">
+  <meta property="og:locale" content="${esc(locale.ogLocale)}">
+  ${alternateOgLocales}
   <meta property="og:type" content="${esc(type)}">
   <meta property="og:title" content="${esc(pageTitle)}">
   <meta property="og:description" content="${esc(description)}">
@@ -181,49 +201,50 @@ export function renderLayout({ site, route, title, description, content, cssHref
   <meta property="og:image" content="${esc(socialImage)}">
   <title>${esc(pageTitle)}</title>
   <link rel="canonical" href="${esc(canonical)}">
+  ${alternateLinks}
   <link rel="icon" type="image/png" href="/assets/icons/favicon-32.png" sizes="32x32">
   <link rel="apple-touch-icon" href="/assets/icons/apple-touch-icon.png">
-  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="manifest" href="${esc(publicRoute(locale.id, '/manifest.webmanifest'))}">
   <link rel="stylesheet" href="${esc(safeUrl(cssHref))}">
   <script defer src="${esc(safeUrl(jsHref))}"></script>
 </head>
-<body data-route="${esc(safeRoute)}">
-  <a class="skip-link" href="#main">Перейти к содержанию</a>
+<body data-route="${esc(safeRoute)}" data-locale="${esc(locale.htmlLang)}" data-search-index="${esc(publicRoute(locale.id, '/search-index.json'))}" data-search-min-length="${locale.searchMinLength}" data-menu-label="${esc(message('menu'))}" data-menu-close-label="${esc(message('closeMenu'))}" data-search-minimum="${esc(message('searchMinimum'))}" data-search-empty="${esc(message('searchEmpty'))}" data-search-unavailable="${esc(message('searchUnavailable'))}">
+  <a class="skip-link" href="#main">${esc(message('skipToContent'))}</a>
 
   <div class="access-panel" id="access-panel" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="access-title">
     <div class="access-inner">
-      <div class="modal-head"><h2 id="access-title">Настройки отображения</h2><button class="close-btn" type="button" data-access-close>Закрыть</button></div>
+      <div class="modal-head"><h2 id="access-title">${esc(message('displaySettings'))}</h2><button class="close-btn" type="button" data-access-close>${esc(message('close'))}</button></div>
       <div class="access-grid">
-        <fieldset><legend>Размер текста</legend><button type="button" data-setting="size" data-value="normal">A</button><button type="button" data-setting="size" data-value="large">A+</button><button type="button" data-setting="size" data-value="xlarge">A++</button></fieldset>
-        <fieldset><legend>Цвет</legend><button type="button" data-setting="theme" data-value="normal">Обычный</button><button type="button" data-setting="theme" data-value="mono">Ч/б</button><button type="button" data-setting="theme" data-value="contrast">Контраст</button></fieldset>
-        <fieldset><legend>Изображения</legend><button type="button" data-setting="images" data-value="on">Показывать</button><button type="button" data-setting="images" data-value="off">Скрыть</button></fieldset>
-        <fieldset><legend>Интервалы</legend><button type="button" data-setting="spacing" data-value="normal">Обычные</button><button type="button" data-setting="spacing" data-value="wide">Увеличенные</button></fieldset>
-        <fieldset><legend>Анимация</legend><button type="button" data-setting="motion" data-value="on">Включить</button><button type="button" data-setting="motion" data-value="off">Выключить</button></fieldset>
-        <button class="button button-dark" type="button" data-access-reset>Сбросить</button>
+        <fieldset><legend>${esc(message('textSize'))}</legend><button type="button" data-setting="size" data-value="normal">A</button><button type="button" data-setting="size" data-value="large">A+</button><button type="button" data-setting="size" data-value="xlarge">A++</button></fieldset>
+        <fieldset><legend>${esc(message('color'))}</legend><button type="button" data-setting="theme" data-value="normal">${esc(message('normal'))}</button><button type="button" data-setting="theme" data-value="mono">${esc(message('monochrome'))}</button><button type="button" data-setting="theme" data-value="contrast">${esc(message('contrast'))}</button></fieldset>
+        <fieldset><legend>${esc(message('images'))}</legend><button type="button" data-setting="images" data-value="on">${esc(message('show'))}</button><button type="button" data-setting="images" data-value="off">${esc(message('hide'))}</button></fieldset>
+        <fieldset><legend>${esc(message('spacing'))}</legend><button type="button" data-setting="spacing" data-value="normal">${esc(message('normal'))}</button><button type="button" data-setting="spacing" data-value="wide">${esc(message('increased'))}</button></fieldset>
+        <fieldset><legend>${esc(message('animation'))}</legend><button type="button" data-setting="motion" data-value="on">${esc(message('enable'))}</button><button type="button" data-setting="motion" data-value="off">${esc(message('disable'))}</button></fieldset>
+        <button class="button button-dark" type="button" data-access-reset>${esc(message('reset'))}</button>
       </div>
     </div>
   </div>
 
   <div class="search-modal" id="search-modal" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="search-title">
     <div class="search-inner">
-      <div class="modal-head"><h2 id="search-title">Поиск по сайту</h2><button class="close-btn" type="button" data-search-close>Закрыть</button></div>
-      <label class="visually-hidden" for="site-search">Поисковый запрос</label>
-      <input id="site-search" class="search-input" type="search" autocomplete="off" placeholder="Поступление, лицензия, ШКИ">
-      <div class="search-results" id="search-results" aria-live="polite"><p>Введите минимум два символа.</p></div>
+      <div class="modal-head"><h2 id="search-title">${esc(message('searchSite'))}</h2><button class="close-btn" type="button" data-search-close>${esc(message('close'))}</button></div>
+      <label class="visually-hidden" for="site-search">${esc(message('searchQuery'))}</label>
+      <input id="site-search" class="search-input" type="search" autocomplete="off" placeholder="${esc(message('searchPlaceholder'))}">
+      <div class="search-results" id="search-results" aria-live="polite"><p>${esc(message('searchMinimum'))}</p></div>
     </div>
   </div>
 
-  <div class="utility"><div class="wrap utility-inner"><span class="utility-label">${esc(siteData.utilityLabel)}</span><div class="utility-actions"><button type="button" data-search-open>Поиск</button><button type="button" data-access-open>Версия для слабовидящих</button>${utilityNavigation}</div></div></div>
+  <div class="utility"><div class="wrap utility-inner"><span class="utility-label">${esc(siteData.utilityLabel)}</span><div class="utility-actions"><button type="button" data-search-open>${esc(message('search'))}</button><button type="button" data-access-open>${esc(message('accessibleVersion'))}</button>${utilityNavigation}</div></div></div>
 
-  <header class="site-header"><div class="wrap header-inner"><a class="brand" href="/" aria-label="${esc(brandAriaLabel)}"><span class="brand-logo-wrap" aria-hidden="true">${logoImage(logo, 'brand-logo', '')}</span></a><nav class="primary-nav" id="primary-nav" aria-label="Основная навигация"><ul class="primary-nav-list" data-nav-list>${primaryNavigation}</ul></nav><button class="menu-button" id="menu-button" type="button" aria-controls="primary-nav" aria-expanded="false">Меню</button></div></header>
+  <header class="site-header"><div class="wrap header-inner"><a class="brand" href="${esc(localHref('/'))}" aria-label="${esc(brandAriaLabel)}"><span class="brand-logo-wrap" aria-hidden="true">${logoImage(logo, 'brand-logo', '')}</span></a><nav class="primary-nav" id="primary-nav" aria-label="${esc(message('primaryNavigation'))}"><ul class="primary-nav-list" data-nav-list>${primaryNavigation}</ul></nav><button class="menu-button" id="menu-button" type="button" aria-controls="primary-nav" aria-expanded="false">${esc(message('menu'))}</button></div></header>
 
   ${content}
 
-  ${usefulLinks ? `<section class="useful-links" aria-labelledby="useful-links-title"><div class="wrap"><div class="useful-links-head"><div><span class="useful-links-kicker">Сервисы и ведомства</span><h2 id="useful-links-title">Полезные ссылки</h2></div><p>Государственные сервисы и ведомства в сфере образования и культуры.</p></div><ol class="useful-links-grid">${usefulLinks}</ol></div></section>` : ''}
+  ${usefulLinks ? `<section class="useful-links" aria-labelledby="useful-links-title"><div class="wrap"><div class="useful-links-head"><div><span class="useful-links-kicker">${esc(message('usefulKicker'))}</span><h2 id="useful-links-title">${esc(message('usefulTitle'))}</h2></div><p>${esc(message('usefulDescription'))}</p></div><ol class="useful-links-grid">${usefulLinks}</ol></div></section>` : ''}
 
-  <section class="quick-links" aria-labelledby="quick-links-title"><div class="wrap quick-grid"><h2 id="quick-links-title">Быстрый доступ</h2>${quickLinks}</div></section>
+  <section class="quick-links" aria-labelledby="quick-links-title"><div class="wrap quick-grid"><h2 id="quick-links-title">${esc(message('quickAccess'))}</h2>${quickLinks}</div></section>
 
-  <footer class="site-footer"><div class="wrap footer-grid"><div class="footer-brand"><a class="footer-logo-link" href="/" aria-label="${esc(brandAriaLabel)}">${logoImage(logo, 'footer-logo', logo.alt || '')}</a><p>${esc(siteData.legalName)}</p></div><div><strong>Навигация</strong>${footerNavigation}</div><div><strong>Контакты</strong>${contactDetails(siteData.contacts)}</div><div><strong>Правовая информация</strong>${legalNavigation}</div><div class="footer-resources"><strong>Официальные ресурсы</strong>${officialNavigation}${socialNavigation ? `<strong class="footer-social-title">Социальные сети</strong><div class="footer-social-links">${socialNavigation}</div>` : ''}</div></div><div class="wrap footer-bottom">${footerStatus ? `<span>${esc(footerStatus)}</span>` : ''}${footerDisclaimer ? `<span>${esc(footerDisclaimer)}</span>` : ''}</div></footer>
+  <footer class="site-footer"><div class="wrap footer-grid"><div class="footer-brand"><a class="footer-logo-link" href="${esc(localHref('/'))}" aria-label="${esc(brandAriaLabel)}">${logoImage(logo, 'footer-logo', logo.alt || '')}</a><p>${esc(siteData.legalName)}</p></div><div><strong>${esc(message('navigation'))}</strong>${footerNavigation}</div><div><strong>${esc(message('contacts'))}</strong>${contactDetails(siteData.contacts)}</div><div><strong>${esc(message('legalInformation'))}</strong>${legalNavigation}</div><div class="footer-resources"><strong>${esc(message('officialResources'))}</strong>${officialNavigation}${socialNavigation ? `<strong class="footer-social-title">${esc(message('socialNetworks'))}</strong><div class="footer-social-links">${socialNavigation}</div>` : ''}</div></div><div class="wrap footer-bottom">${footerStatus ? `<span>${esc(footerStatus)}</span>` : ''}${footerDisclaimer ? `<span>${esc(footerDisclaimer)}</span>` : ''}${translationNotice ? `<span class="translation-notice">${esc(translationNotice)}</span>` : ''}</div></footer>
 </body>
 </html>`;
 }

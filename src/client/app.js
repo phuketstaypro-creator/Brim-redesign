@@ -2,6 +2,16 @@ const documentElement = document.documentElement;
 documentElement.classList.add('nav-enhanced');
 
 const body = document.body;
+const clientLocale = body.dataset.locale || document.documentElement.lang || 'ru';
+const searchIndexUrl = body.dataset.searchIndex || '/search-index.json';
+const searchMinimumLength = Number.parseInt(body.dataset.searchMinLength || '2', 10);
+const clientMessages = {
+  menu: body.dataset.menuLabel || 'Menu',
+  closeMenu: body.dataset.menuCloseLabel || 'Close',
+  searchMinimum: body.dataset.searchMinimum || 'Enter a search query.',
+  searchEmpty: body.dataset.searchEmpty || 'No results found.',
+  searchUnavailable: body.dataset.searchUnavailable || 'Search is temporarily unavailable.'
+};
 const nav = document.getElementById('primary-nav');
 const menu = document.getElementById('menu-button');
 const header = document.querySelector('.site-header');
@@ -116,9 +126,9 @@ function isMobileNavigation() {
 }
 
 function navigationBreakpoint() {
-  if (settings.size === 'xlarge') return 1420;
-  if (settings.size === 'large') return 1280;
-  return 1080;
+  if (settings.size === 'xlarge') return 1450;
+  if (settings.size === 'large') return 1320;
+  return 1220;
 }
 
 function updateNavigationMode() {
@@ -169,7 +179,7 @@ function setMenu(open, { restoreFocus = false } = {}) {
   nav.classList.toggle('open', open);
   body.classList.toggle('menu-open', open);
   menu.setAttribute('aria-expanded', String(open));
-  menu.textContent = open ? 'Закрыть' : 'Меню';
+  menu.textContent = open ? clientMessages.closeMenu : clientMessages.menu;
   if (open) {
     updateNavigationTop();
     requestAnimationFrame(() => {
@@ -225,7 +235,7 @@ function trapDialogFocus(event) {
 
 async function getSearchIndex() {
   if (searchIndex) return searchIndex;
-  const response = await fetch('/search-index.json', { credentials: 'same-origin' });
+  const response = await fetch(searchIndexUrl, { credentials: 'same-origin' });
   if (!response.ok) throw new Error(`Search index: ${response.status}`);
   searchIndex = await response.json();
   return searchIndex;
@@ -233,16 +243,16 @@ async function getSearchIndex() {
 
 function renderSearchResults(results, query) {
   searchResults.replaceChildren();
-  if (query.length < 2) {
+  if (query.length < searchMinimumLength) {
     const message = document.createElement('p');
-    message.textContent = 'Введите минимум два символа.';
+    message.textContent = clientMessages.searchMinimum;
     searchResults.append(message);
     return;
   }
 
   if (!results.length) {
     const message = document.createElement('p');
-    message.textContent = 'Ничего не найдено.';
+    message.textContent = clientMessages.searchEmpty;
     searchResults.append(message);
     return;
   }
@@ -331,8 +341,8 @@ document.addEventListener('keydown', (event) => {
 });
 
 searchInput?.addEventListener('input', async (event) => {
-  const query = event.target.value.toLocaleLowerCase('ru').trim();
-  if (query.length < 2) {
+  const query = event.target.value.toLocaleLowerCase(clientLocale).trim();
+  if (query.length < searchMinimumLength) {
     renderSearchResults([], query);
     return;
   }
@@ -340,10 +350,10 @@ searchInput?.addEventListener('input', async (event) => {
   try {
     const index = await getSearchIndex();
     const results = index
-      .filter((item) => `${item.title} ${item.description}`.toLocaleLowerCase('ru').includes(query))
+      .filter((item) => `${item.title} ${item.description}`.toLocaleLowerCase(clientLocale).includes(query))
       .slice(0, 12);
     renderSearchResults(results, query);
   } catch {
-    searchResults.textContent = 'Поиск временно недоступен.';
+    searchResults.textContent = clientMessages.searchUnavailable;
   }
 });

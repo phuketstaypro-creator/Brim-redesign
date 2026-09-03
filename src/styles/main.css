@@ -62,6 +62,15 @@ img{max-width:100%;display:block}
 .nav-panel-list a{display:flex;align-items:center;min-height:44px;padding:8px 10px;color:#eee5dd;text-decoration:none;font-size:.78rem;line-height:1.35;border-radius:4px}
 .nav-panel-list a:hover,.nav-panel-list a[aria-current]{background:#711934;color:#fff}
 .nav-cta{align-self:center;height:auto!important;min-height:42px!important;border:1px solid rgba(255,255,255,.62);border-radius:999px;padding:9px 14px}
+.nav-language-item{align-items:center}
+.language-disclosure{height:auto}
+.language-disclosure>summary{min-width:58px;min-height:42px;justify-content:center;padding:8px 12px;border:1px solid rgba(255,255,255,.62);border-radius:999px;text-decoration:none!important}
+.language-disclosure .nav-summary-icon{width:6px;height:6px}
+.language-panel{right:0;width:190px}
+.language-panel .nav-panel-inner{padding:10px}
+.language-list{display:grid;gap:2px}
+.language-list a{display:flex;align-items:center;min-height:44px;padding:9px 12px;border-radius:4px;color:#eee5dd;text-decoration:none;font-size:.82rem;font-weight:700}
+.language-list a:hover,.language-list a[aria-current]{background:#711934;color:#fff}
 .menu-button{display:none;margin-left:auto;color:#fff;background:transparent;border:1px solid rgba(255,255,255,.62);border-radius:999px;padding:10px 15px;min-height:46px}
 
 .hero{position:relative;min-height:calc(100svh - 122px);background:#140f0f;color:#fff;overflow:hidden}
@@ -318,6 +327,8 @@ html[data-spacing=wide]{--line-height:1.9;letter-spacing:.08em;word-spacing:.12e
 html[data-motion=off] *{animation:none!important;transition:none!important;scroll-behavior:auto!important}
 html[data-motion=off] .useful-link-card:hover{transform:none}
 html[data-size=xlarge] .useful-links-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
+html:lang(zh-CN){--serif:'Songti SC','STSong','SimSun',serif;--sans:'PingFang SC','Microsoft YaHei',Arial,sans-serif}
+html:lang(zh-CN) .eyebrow,html:lang(zh-CN) .section-index,html:lang(zh-CN) .program-meta,html:lang(zh-CN) .useful-links-kicker{letter-spacing:.08em}
 
 /* The accessibility font sizes need the compact navigation before the normal viewport breakpoint. */
 html.nav-enhanced.nav-compact .header-inner{flex-wrap:nowrap}
@@ -337,6 +348,9 @@ html.nav-enhanced.nav-compact .nav-panel-label{margin:0;padding:12px 16px 4px}
 html.nav-enhanced.nav-compact .nav-panel-list,html.nav-enhanced.nav-compact .nav-disclosure.is-large .nav-panel-list{grid-template-columns:1fr;gap:0}
 html.nav-enhanced.nav-compact .nav-panel-list a{min-height:44px;padding:10px 16px;border-radius:0;font-size:.9rem}
 html.nav-enhanced.nav-compact .nav-cta{display:flex!important;min-height:44px!important;padding:13px 2px!important;border:0;border-radius:0}
+html.nav-enhanced.nav-compact .language-disclosure>summary{justify-content:space-between;min-height:44px;padding:13px 2px;border:0;border-radius:0}
+html.nav-enhanced.nav-compact .language-panel .nav-panel-inner{padding:6px 0 14px}
+html.nav-enhanced.nav-compact .language-list a{min-height:44px;padding:10px 16px;border-radius:0;font-size:.9rem}
 html.nav-enhanced.nav-compact .menu-button{display:inline-flex;align-items:center;justify-content:center;position:relative;z-index:402}
 
 @media(max-width:1180px){
@@ -349,7 +363,7 @@ html.nav-enhanced.nav-compact .menu-button{display:inline-flex;align-items:cente
   .footer-grid{grid-template-columns:1fr 1fr}
 }
 
-@media(max-width:1080px){
+@media(max-width:1220px){
   html:not(.nav-enhanced) .site-header{position:relative}
   .header-inner{flex-wrap:wrap}
   .primary-nav{order:3;display:block;flex:1 0 100%;width:100%;margin:0;border-top:1px solid rgba(255,255,255,.14)}
@@ -367,6 +381,9 @@ html.nav-enhanced.nav-compact .menu-button{display:inline-flex;align-items:cente
   .nav-panel-list,.nav-disclosure.is-large .nav-panel-list{grid-template-columns:1fr;gap:0}
   .nav-panel-list a{min-height:44px;padding:10px 16px;border-radius:0;font-size:.9rem}
   .nav-cta{display:flex!important;min-height:44px!important;padding:13px 2px!important;border:0;border-radius:0}
+  .language-disclosure>summary{justify-content:space-between;min-height:44px;padding:13px 2px;border:0;border-radius:0}
+  .language-panel .nav-panel-inner{padding:6px 0 14px}
+  .language-list a{min-height:44px;padding:10px 16px;border-radius:0;font-size:.9rem}
   html.nav-enhanced .header-inner{flex-wrap:nowrap}
   html.nav-enhanced .menu-button{display:inline-flex;align-items:center;justify-content:center;position:relative;z-index:402}
   html.nav-enhanced .primary-nav{position:fixed;z-index:400;left:0;right:0;top:var(--nav-top,122px);bottom:0;display:block;width:auto;margin:0;padding:10px 24px calc(26px + env(safe-area-inset-bottom));overflow:auto;background:#171211;border-top:0;opacity:0;visibility:hidden;pointer-events:none;transform:translateY(-10px);transition:opacity .2s,transform .2s,visibility 0s linear .2s}

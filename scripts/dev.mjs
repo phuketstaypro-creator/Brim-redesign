@@ -54,6 +54,12 @@ function resolveRequest(pathname) {
   return null;
 }
 
+function localizedNotFound(pathname) {
+  if (pathname === '/en' || pathname.startsWith('/en/')) return join(distRoot, 'en', '404.html');
+  if (pathname === '/zh' || pathname.startsWith('/zh/')) return join(distRoot, 'zh', '404.html');
+  return join(distRoot, '404.html');
+}
+
 const server = createServer((request, response) => {
   const url = new URL(request.url || '/', `http://${request.headers.host || 'localhost'}`);
   const file = resolveRequest(url.pathname);
@@ -61,7 +67,7 @@ const server = createServer((request, response) => {
   if (!file) {
     response.statusCode = 404;
     response.setHeader('Content-Type', mimeTypes['.html']);
-    createReadStream(join(distRoot, '404.html')).pipe(response);
+    createReadStream(localizedNotFound(url.pathname)).pipe(response);
     return;
   }
 

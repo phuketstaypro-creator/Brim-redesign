@@ -5,11 +5,16 @@ import {
   isPlainObject
 } from './contracts.mjs';
 import { SVEDEN_REQUIRED_ROUTES, missingRequiredRoutes } from './required-routes.mjs';
+import { DEFAULT_LOCALE, LOCALE_IDS, localeConfig } from '../i18n/config.mjs';
 
 const identifierPattern = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
 const rightsStatuses = new Set(MEDIA_RIGHTS_STATUSES);
 const editorialVariants = new Set(['featured', 'wide', 'portrait', 'square', 'standard']);
 const svedenGroups = new Set(['mandatory', 'legacy']);
+const reservedLocaleRoutePrefixes = new Set(LOCALE_IDS
+  .filter((locale) => locale !== DEFAULT_LOCALE)
+  .map((locale) => localeConfig(locale).prefix.replace(/^\//, '').toLowerCase())
+  .filter(Boolean));
 
 export function isSafePublicRoute(value) {
   if (value === '/') return true;
@@ -19,6 +24,7 @@ export function isSafePublicRoute(value) {
 
   const segments = value.slice(1, -1).split('/');
   if (!segments.length || segments.some((segment) => !segment || segment === '.' || segment === '..')) return false;
+  if (reservedLocaleRoutePrefixes.has(segments[0].toLowerCase())) return false;
   return segments.every((segment) => /^[A-Za-z0-9][A-Za-z0-9._~-]*$/.test(segment));
 }
 

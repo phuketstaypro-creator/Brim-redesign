@@ -16,13 +16,14 @@ import {
   sideNavigation
 } from './components.mjs';
 import { renderRichText } from './rich-text.mjs';
+import { localHref, message } from '../i18n/render-context.mjs';
 
 function primaryProgramCards(programs) {
   return `<div class="program-grid">${programs.filter((program) => program.primary).map(programCard).join('')}</div>`;
 }
 
 function additionalPrograms(programs) {
-  return `<div class="additional-programs"><div class="additional-programs-label">Дополнительные программы</div>${programs.filter((program) => !program.primary).map((program) => `<a class="additional-program" href="${esc(program.href)}" data-cms-item="program"><div><span>${esc(program.code)}</span><h3 data-cms-field="title">${esc(program.title)}</h3></div><p data-cms-field="excerpt">${esc(program.description)}</p><strong aria-hidden="true">↗</strong></a>`).join('')}</div>`;
+  return `<div class="additional-programs"><div class="additional-programs-label">${esc(message('additionalPrograms'))}</div>${programs.filter((program) => !program.primary).map((program) => `<a class="additional-program" href="${esc(localHref(program.href))}" data-cms-item="program"><div><span>${esc(program.code)}</span><h3 data-cms-field="title">${esc(program.title)}</h3></div><p data-cms-field="excerpt">${esc(program.description)}</p><strong aria-hidden="true">↗</strong></a>`).join('')}</div>`;
 }
 
 function newestFirst(items) {
@@ -41,7 +42,7 @@ function heroHeading(value) {
 function actionLinks(actions = []) {
   return actions.map((action) => {
     const style = action.style === 'outline' ? 'button-outline' : action.style === 'dark' ? 'button-dark' : 'button-light';
-    return `<a class="button ${style}" href="${esc(action.href)}">${esc(action.label)}</a>`;
+    return `<a class="button ${style}" href="${esc(localHref(action.href))}">${esc(action.label)}</a>`;
   }).join('');
 }
 
@@ -50,7 +51,7 @@ function stats(items = []) {
 }
 
 function admissionSteps(items = []) {
-  return `<div class="card-grid">${items.map((item, index) => `<article class="card card-dark"><span class="card-kicker">${String(index + 1).padStart(2, '0')}</span><h3>${esc(item.title)}</h3><p>${esc(item.description)}</p><a href="${esc(item.href)}">${esc(item.linkLabel)}</a></article>`).join('')}</div>`;
+  return `<div class="card-grid">${items.map((item, index) => `<article class="card card-dark"><span class="card-kicker">${String(index + 1).padStart(2, '0')}</span><h3>${esc(item.title)}</h3><p>${esc(item.description)}</p><a href="${esc(localHref(item.href))}">${esc(item.linkLabel)}</a></article>`).join('')}</div>`;
 }
 
 export function renderHome({ site, programs, newsItems }) {
@@ -69,7 +70,7 @@ export function renderHome({ site, programs, newsItems }) {
 
       <section class="section"><div class="wrap">${sectionHead(home.education.index, home.education.label, home.education.title, home.education.lead)}${primaryProgramCards(programs)}${additionalPrograms(programs)}</div></section>
 
-      <section class="section section-paper news-section"><div class="wrap">${sectionHead(home.news.index, home.news.label, home.news.title, home.news.lead)}${editorialNews(latestNews, 'home')}<div class="section-action"><a class="button button-dark" href="/news/">Все новости →</a></div></div></section>
+      <section class="section section-paper news-section"><div class="wrap">${sectionHead(home.news.index, home.news.label, home.news.title, home.news.lead)}${editorialNews(latestNews, 'home')}<div class="section-action"><a class="button button-dark" href="${esc(localHref('/news/'))}">${esc(message('allNews'))}</a></div></div></section>
 
       <section class="section section-dark"><div class="wrap">${sectionHead(home.admission.index, home.admission.label, home.admission.title, home.admission.lead)}${admissionSteps(home.admission.steps)}</div></section>
 
@@ -86,7 +87,7 @@ export function renderEducation({ site, programs, page }) {
     title: page.title,
     description: page.description,
     image: socialImage(page.image),
-    content: `<main id="main">${pageHero(page.kicker, page.title, page.description, page.image)}${breadcrumbs([{ href: '/', title: 'Главная' }, { title: page.title }])}<section class="page-section"><div class="wrap"><div class="education-intro"><span>Образовательная экосистема</span><p>ШКИ и «Балет для всех» встроены в общую структуру программ рядом с основными специальностями.</p></div><div class="education-group"><div class="education-group-head"><span>01</span><div><h2>Основные программы СПО</h2><p>Профессиональная подготовка артистов и преподавателей.</p></div></div><div class="education-program-list">${primary.map(educationProgram).join('')}</div></div><div class="education-group"><div class="education-group-head"><span>02</span><div><h2>Дополнительные программы</h2><p>Дополнительные образовательные направления колледжа.</p></div></div><div class="education-program-list education-program-list-additional">${additional.map(educationProgram).join('')}</div></div></div></section></main>`
+    content: `<main id="main">${pageHero(page.kicker, page.title, page.description, page.image)}${breadcrumbs([{ href: '/', title: message('home') }, { title: page.title }])}<section class="page-section"><div class="wrap"><div class="education-intro"><span>${esc(message('educationEcosystem'))}</span><p>${esc(message('educationIntro'))}</p></div><div class="education-group"><div class="education-group-head"><span>01</span><div><h2>${esc(message('mainVocationalPrograms'))}</h2><p>${esc(message('mainVocationalLead'))}</p></div></div><div class="education-program-list">${primary.map(educationProgram).join('')}</div></div><div class="education-group"><div class="education-group-head"><span>02</span><div><h2>${esc(message('additionalPrograms'))}</h2><p>${esc(message('additionalProgramsLead'))}</p></div></div><div class="education-program-list education-program-list-additional">${additional.map(educationProgram).join('')}</div></div></div></section></main>`
   };
 }
 
@@ -97,7 +98,7 @@ export function renderNews({ site, newsItems, page }) {
     title: page.title,
     description: page.description,
     image: socialImage(page.image),
-    content: `<main id="main">${pageHero(page.kicker, page.title, page.description, page.image)}${breadcrumbs([{ href: '/', title: 'Главная' }, { title: page.title }])}<section class="page-section editorial-page"><div class="wrap editorial-layout"><aside class="editorial-sidebar"><strong>БРХК</strong><a aria-current="page" href="/news/">Новости</a><a href="/events/">Афиша</a><a href="/gallery/">Галерея</a></aside><div><div class="editorial-page-head"><h2>Последние публикации</h2><p>Заголовки и даты сохранены с ранее опубликованных страниц колледжа. Полные тексты подключаются после согласованного экспорта CMS. Форма карточки автоматически учитывает пропорции фотографии.</p></div>${editorialNews(latestNews, 'archive')}</div></div></section></main>`
+    content: `<main id="main">${pageHero(page.kicker, page.title, page.description, page.image)}${breadcrumbs([{ href: '/', title: message('home') }, { title: page.title }])}<section class="page-section editorial-page"><div class="wrap editorial-layout"><aside class="editorial-sidebar"><strong>${esc(message('collegeAbbreviation'))}</strong><a aria-current="page" href="${esc(localHref('/news/'))}">${esc(message('news'))}</a><a href="${esc(localHref('/events/'))}">${esc(message('events'))}</a><a href="${esc(localHref('/gallery/'))}">${esc(message('gallery'))}</a></aside><div><div class="editorial-page-head"><h2>${esc(message('latestPublications'))}</h2><p>${esc(message('latestPublicationsLead'))}</p></div>${editorialNews(latestNews, 'archive')}</div></div></section></main>`
   };
 }
 
@@ -111,20 +112,20 @@ function articleVisual(item) {
 function articleAttachments(items = []) {
   const attachments = Array.isArray(items) ? items : [];
   if (!attachments.length) return '';
-  return `<section class="article-attachments"><h2>Материалы</h2><ul>${attachments.map((item) => `<li><a href="${esc(item.href)}">${esc(item.title)}</a></li>`).join('')}</ul></section>`;
+  return `<section class="article-attachments"><h2>${esc(message('materials'))}</h2><ul>${attachments.map((item) => `<li><a href="${esc(localHref(item.href))}">${esc(item.title)}</a></li>`).join('')}</ul></section>`;
 }
 
 function articleGallery(items = []) {
   if (!Array.isArray(items) || !items.length) return '';
-  return `<section class="wrap article-gallery" data-cms-field="gallery"><h2>Галерея</h2>${gallery(items)}</section>`;
+  return `<section class="wrap article-gallery" data-cms-field="gallery"><h2>${esc(message('gallery'))}</h2>${gallery(items)}</section>`;
 }
 
 export function renderNewsArticle(item, site) {
   const published = item.publishedAt || '';
   const sourceBlock = item.source
-    ? `<p class="legal-note"><strong>Источник:</strong> заголовок и дата связаны с ранее опубликованным материалом колледжа; доступность архивного URL не гарантируется. <a href="${esc(item.source)}" rel="external">${esc(item.sourceLabel || 'Архивный URL источника')} ↗</a></p>`
-    : '<p class="legal-note"><strong>Материал ожидает сверки.</strong> Полная публикация подключается из CMS после подтверждения источника.</p>';
-  const body = renderRichText(item.body) || `<p class="article-lead">${esc(item.excerpt)}</p><h2>Полная публикация</h2><p>Основной текст, авторство и медиагалерея не дополняются без подтверждённого источника или экспорта CMS колледжа.</p>`;
+    ? `<p class="legal-note"><strong>${esc(message('source'))}</strong> ${esc(message('sourceContext'))} <a href="${esc(item.source)}" rel="external">${esc(item.sourceLabel || message('archiveSource'))} ↗</a></p>`
+    : `<p class="legal-note"><strong>${esc(message('pendingReviewTitle'))}</strong> ${esc(message('pendingReviewBody'))}</p>`;
+  const body = renderRichText(item.body) || `<p class="article-lead">${esc(item.excerpt)}</p><h2>${esc(message('fullPublication'))}</h2><p>${esc(message('fullPublicationPending'))}</p>`;
   const mediaId = item.image || item.coverImage;
   return {
     route: item.href,
@@ -132,14 +133,14 @@ export function renderNewsArticle(item, site) {
     description: item.seoDescription || item.excerpt,
     type: 'article',
     image: socialImage(mediaId),
-    content: `<main id="main"><article class="article" data-cms-item="news"><header class="article-head"><div class="wrap article-head-grid"><div><div class="eyebrow">${esc(item.category)} · <time datetime="${esc(published)}">${esc(item.date || published)}</time></div><h1 data-cms-field="title">${esc(item.title)}</h1><p data-cms-field="excerpt">${esc(item.excerpt)}</p></div><span class="article-number">БРХК / NEWS</span></div></header>${articleVisual(item)}${breadcrumbs([{ href: '/', title: 'Главная' }, { href: '/news/', title: 'Новости' }, { title: item.title }])}<div class="wrap article-layout"><div class="article-body" data-cms-field="body">${sourceBlock}${body}${articleAttachments(item.attachments)}</div>${sideNavigation(site.sideNavigation)}</div>${articleGallery(item.gallery)}</article></main>`
+    content: `<main id="main"><article class="article" data-cms-item="news"><header class="article-head"><div class="wrap article-head-grid"><div><div class="eyebrow">${esc(item.category)} · <time datetime="${esc(published)}">${esc(item.date || published)}</time></div><h1 data-cms-field="title">${esc(item.title)}</h1><p data-cms-field="excerpt">${esc(item.excerpt)}</p></div><span class="article-number">${esc(message('collegeAbbreviation'))} / ${esc(message('articleNewsCode'))}</span></div></header>${articleVisual(item)}${breadcrumbs([{ href: '/', title: message('home') }, { href: '/news/', title: message('news') }, { title: item.title }])}<div class="wrap article-layout"><div class="article-body" data-cms-field="body">${sourceBlock}${body}${articleAttachments(item.attachments)}</div>${sideNavigation(site.sideNavigation)}</div>${articleGallery(item.gallery)}</article></main>`
   };
 }
 
 export function renderEventArticle(item, site) {
   const dateLabel = item.date || item.startsAt || '';
   const body = renderRichText(item.body)
-    || `<p class="article-lead">${esc(item.description || '')}</p><p class="legal-note">Расписание и подробности подключаются из подтверждённой записи CMS.</p>`;
+    || `<p class="article-lead">${esc(item.description || '')}</p><p class="legal-note">${esc(message('schedulePending'))}</p>`;
   const mediaId = item.image || item.coverImage;
   return {
     route: item.href,
@@ -147,22 +148,22 @@ export function renderEventArticle(item, site) {
     description: item.seoDescription || item.description || item.title,
     type: 'article',
     image: socialImage(mediaId),
-    content: `<main id="main"><article class="article" data-cms-item="event"><header class="article-head"><div class="wrap article-head-grid"><div><div class="eyebrow">${esc(item.category || 'Афиша')}${dateLabel ? ` · <time datetime="${esc(item.startsAt || item.publishedAt || '')}">${esc(dateLabel)}</time>` : ''}</div><h1 data-cms-field="title">${esc(item.title)}</h1>${item.description ? `<p data-cms-field="excerpt">${esc(item.description)}</p>` : ''}</div><span class="article-number">БРХК / EVENT</span></div></header>${articleVisual(item)}${breadcrumbs([{ href: '/', title: 'Главная' }, { href: '/events/', title: 'Афиша' }, { title: item.title }])}<div class="wrap article-layout"><div class="article-body" data-cms-field="body">${body}${articleAttachments(item.attachments)}</div>${sideNavigation(site.sideNavigation)}</div></article></main>`
+    content: `<main id="main"><article class="article" data-cms-item="event"><header class="article-head"><div class="wrap article-head-grid"><div><div class="eyebrow">${esc(item.category || message('events'))}${dateLabel ? ` · <time datetime="${esc(item.startsAt || item.publishedAt || '')}">${esc(dateLabel)}</time>` : ''}</div><h1 data-cms-field="title">${esc(item.title)}</h1>${item.description ? `<p data-cms-field="excerpt">${esc(item.description)}</p>` : ''}</div><span class="article-number">${esc(message('collegeAbbreviation'))} / ${esc(message('articleEventCode'))}</span></div></header>${articleVisual(item)}${breadcrumbs([{ href: '/', title: message('home') }, { href: '/events/', title: message('events') }, { title: item.title }])}<div class="wrap article-layout"><div class="article-body" data-cms-field="body">${body}${articleAttachments(item.attachments)}</div>${sideNavigation(site.sideNavigation)}</div></article></main>`
   };
 }
 
 function documentList(page, documents = []) {
   const published = documents.filter((document) => document.href);
   if (published.length) {
-    return `<div class="document-list">${published.map((document) => `<a class="document-item" href="${esc(document.href)}"><span class="document-icon" aria-hidden="true">${esc(document.fileType || 'PDF')}</span><div><strong>${esc(document.title)}</strong>${document.updatedAt ? `<br><small>Обновлено: ${esc(document.updatedAt)}</small>` : ''}</div><span>Скачать</span></a>`).join('')}</div>`;
+    return `<div class="document-list">${published.map((document) => `<a class="document-item" href="${esc(localHref(document.href))}"><span class="document-icon" aria-hidden="true">${esc(document.fileType || 'PDF')}</span><div><strong>${esc(document.title)}</strong>${document.updatedAt ? `<br><small>${esc(message('updated'))} ${esc(document.updatedAt)}</small>` : ''}</div><span>${esc(message('download'))}</span></a>`).join('')}</div>`;
   }
   const expected = Array.isArray(page.documents) ? page.documents : [];
-  return `<div class="document-list">${expected.map((title) => `<div class="document-item"><span class="document-icon" aria-hidden="true">PDF</span><div><strong>${esc(title)}</strong><br><small>Файл, дата и размер подключаются из CMS после сверки.</small></div><span class="document-pending">Ожидает файла</span></div>`).join('')}</div><div class="legal-note">Неподтверждённые документы не публикуются как активные ссылки.</div>`;
+  return `<div class="document-list">${expected.map((title) => `<div class="document-item"><span class="document-icon" aria-hidden="true">PDF</span><div><strong>${esc(title)}</strong><br><small>${esc(message('fileMetadataPending'))}</small></div><span class="document-pending">${esc(message('awaitingFile'))}</span></div>`).join('')}</div><div class="legal-note">${esc(message('unpublishedDocuments'))}</div>`;
 }
 
 function eventList(events = []) {
   if (!events.length) return '';
-  return `<div class="card-grid" data-cms-collection="events">${newestFirst(events).map((event, index) => `<article class="card" data-cms-item="event"><span class="card-kicker">${esc(event.category || 'Афиша')} · ${String(index + 1).padStart(2, '0')}</span><h3>${esc(event.title)}</h3>${event.description ? `<p>${esc(event.description)}</p>` : ''}<a href="${esc(event.href)}">Подробнее →</a></article>`).join('')}</div>`;
+  return `<div class="card-grid" data-cms-collection="events">${newestFirst(events).map((event, index) => `<article class="card" data-cms-item="event"><span class="card-kicker">${esc(event.category || message('events'))} · ${String(index + 1).padStart(2, '0')}</span><h3>${esc(event.title)}</h3>${event.description ? `<p>${esc(event.description)}</p>` : ''}<a href="${esc(localHref(event.href))}">${esc(message('more'))}</a></article>`).join('')}</div>`;
 }
 
 function employeeList(employees = []) {
@@ -182,14 +183,14 @@ function svedenContent(section) {
 
 function structureOnlyNotice(page) {
   if (!page.structureOnly) return '';
-  return '<div class="legal-note"><strong>Утверждённые материалы не переданы для публикации.</strong> На этой странице показана только структура будущего раздела. Фактические сведения, документы, внешние ссылки, даты и персональные данные подключаются только из подтверждённого экспорта CMS колледжа.</div>';
+  return `<div class="legal-note"><strong>${esc(message('approvedMaterialsMissingTitle'))}</strong> ${esc(message('approvedMaterialsMissingBody'))}</div>`;
 }
 
 function svedenIndex(svedenSections, institutionalNavigation = []) {
   const mandatory = svedenSections.filter((section) => section.group === 'mandatory');
   const legacy = svedenSections.filter((section) => section.group === 'legacy');
-  const cards = (items) => `<div class="sveden-grid">${items.map((section) => `<a href="${esc(section.href)}">${esc(section.title || section.label)}</a>`).join('')}</div>`;
-  return `<section class="disclosure-group" aria-labelledby="mandatory-disclosure-title"><div class="disclosure-group-head"><span>01</span><div><h2 id="mandatory-disclosure-title">Обязательные подразделы</h2><p>Специальный раздел отделён от тематических страниц и доступен без регистрации.</p></div></div>${cards(mandatory)}</section><section class="disclosure-group" aria-labelledby="supplemental-disclosure-title"><div class="disclosure-group-head"><span>02</span><div><h2 id="supplemental-disclosure-title">Сервисы и открытость</h2><p>Эти страницы нужны пользователям и могут иметь собственные основания для публикации, но не подменяют обязательную структуру раздела.</p></div></div>${cards([...institutionalNavigation, ...legacy])}</section><div class="legal-note"><strong>Нормативная основа структуры:</strong> статья 29 Федерального закона № 273-ФЗ, постановление Правительства № 1802, приказ Рособрнадзора № 1493 и изменения к нему № 1353 и № 920. <a href="https://publication.pravo.gov.ru/document/0001202311290017" rel="external">Приказ № 1493</a> · <a href="https://publication.pravo.gov.ru/document/0001202510140008" rel="external">изменения № 1353</a> · <a href="https://minjust.consultant.ru/documents/60145" rel="external">изменения № 920</a>. Наличие страницы само по себе не подтверждает полноту обязательных сведений: содержание и машиночитаемая разметка должны пройти проверку колледжа.</div>`;
+  const cards = (items) => `<div class="sveden-grid">${items.map((section) => `<a href="${esc(localHref(section.href))}">${esc(section.title || section.label)}</a>`).join('')}</div>`;
+  return `<section class="disclosure-group" aria-labelledby="mandatory-disclosure-title"><div class="disclosure-group-head"><span>01</span><div><h2 id="mandatory-disclosure-title">${esc(message('mandatorySubsections'))}</h2><p>${esc(message('mandatoryDescription'))}</p></div></div>${cards(mandatory)}</section><section class="disclosure-group" aria-labelledby="supplemental-disclosure-title"><div class="disclosure-group-head"><span>02</span><div><h2 id="supplemental-disclosure-title">${esc(message('servicesTransparency'))}</h2><p>${esc(message('servicesDescription'))}</p></div></div>${cards([...institutionalNavigation, ...legacy])}</section><div class="legal-note"><strong>${esc(message('legalBasisTitle'))}</strong> ${esc(message('legalBasisText'))} <a href="https://publication.pravo.gov.ru/document/0001202311290017" rel="external">${esc(message('order1493'))}</a> · <a href="https://publication.pravo.gov.ru/document/0001202510140008" rel="external">${esc(message('amendments1353'))}</a> · <a href="https://minjust.consultant.ru/documents/60145" rel="external">${esc(message('amendments920'))}</a>. ${esc(message('disclosureCaveat'))}</div>`;
 }
 
 export function renderGeneric({ route, page, site, svedenSections, documents = [], events = [], employees = [] }) {
@@ -208,8 +209,8 @@ export function renderGeneric({ route, page, site, svedenSections, documents = [
   const isDisclosureRoute = route.startsWith('/sveden/')
     || site.institutionalNavigation?.some((item) => item.href === route);
   const crumbItems = isDisclosureRoute && route !== '/sveden/'
-    ? [{ href: '/', title: 'Главная' }, { href: '/sveden/', title: 'Сведения об организации' }, { title: page.title }]
-    : [{ href: '/', title: 'Главная' }, { title: page.title }];
+    ? [{ href: '/', title: message('home') }, { href: '/sveden/', title: message('organizationInformation') }, { title: page.title }]
+    : [{ href: '/', title: message('home') }, { title: page.title }];
   const directory = isDisclosureRoute
     ? disclosureDirectory(svedenSections, site.institutionalNavigation, route)
     : sideNavigation(site.sideNavigation, { route });
@@ -226,11 +227,11 @@ export function renderGeneric({ route, page, site, svedenSections, documents = [
 export function renderNotFound(site) {
   const mediaId = site?.notFoundImage || 'stage';
   return {
-    route: '/404/',
-    title: 'Страница не найдена',
-    description: 'Запрошенная страница не найдена.',
+    route: '/404.html',
+    title: message('pageNotFound'),
+    description: message('pageNotFoundDescription'),
     image: socialImage(mediaId),
     noindex: true,
-    content: `<main id="main">${pageHero('Ошибка 404', 'Страница не найдена', 'Проверьте адрес или вернитесь на главную.', mediaId)}${breadcrumbs([{ href: '/', title: 'Главная' }, { title: 'Страница не найдена' }])}<section class="page-section"><div class="wrap"><p><a class="button button-dark" href="/">Вернуться на главную</a></p></div></section></main>`
+    content: `<main id="main">${pageHero(message('error404'), message('pageNotFound'), message('pageNotFoundHelp'), mediaId)}${breadcrumbs([{ href: '/', title: message('home') }, { title: message('pageNotFound') }])}<section class="page-section"><div class="wrap"><p><a class="button button-dark" href="${esc(localHref('/'))}">${esc(message('returnHome'))}</a></p></div></section></main>`
   };
 }
