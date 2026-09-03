@@ -42,6 +42,18 @@ JSON adapter принимает полный объект:
 - Запись без workflow metadata считается опубликованной только ради совместимости с локальным adapter. CMS export должен передавать статус явно.
 - Raw HTML не является разрешённым rich-text форматом.
 
+## Locale-слой поверх `ContentBundle`
+
+Схема `1.0.0` остаётся CMS-независимой и описывает один нормализованный logical content graph. Статический генератор публикует его в locale `ru`, `en` и `zh`: русский route не имеет префикса, английский получает `/en`, китайский (`html lang="zh-CN"`) — `/zh`. Поля `route`/`href`, `id`/`slug`, media ID и source paths являются общими стабильными идентификаторами и не переводятся.
+
+В текущем локальном источнике перевод пользовательских строк выполняется `src/i18n/localize.mjs` по точному совпадению с `src/i18n/catalogs/en.mjs` или `zh.mjs`. UI-подписи живут отдельно в `src/i18n/config.mjs`; `render-context.mjs` и `routing.mjs` дают шаблонам сообщения и locale-aware ссылки. Неизвестная кириллическая строка в EN/ZH main content считается ошибкой сборки, поэтому exact-string каталоги нельзя считать fallback-механизмом для произвольного CMS-контента.
+
+`CONTENT_LOCALES` принимает subset `ru,en,zh`. Для `CONTENT_ADAPTER=local` default — все три locale; для внешнего JSON default — `ru`, чтобы существующие экспорты схемы `1.0.0` продолжали собираться. EN/ZH для CMS включаются только после полного перевода всех публикуемых текстовых полей и редакционной проверки. Текущий контракт не вводит новую CMS и не определяет vendor-specific locale schema: будущий adapter должен свести локализованные записи к стабильным logical routes/ID/media и только затем передать их генератору.
+
+Logical routes не могут начинаться с зарезервированных сегментов `/en/` или `/zh/`: эти префиксы добавляет только генератор. Root-relative ссылки на файлы без завершающего `/` (например, `/uploads/order.pdf`) считаются общими deployment assets и не получают языковой префикс; принимающая CMS/build-цепочка обязана фактически положить такой файл в соответствующий публичный путь.
+
+Английские и китайские тексты имеют информационный характер. Русскоязычные правовые материалы и утверждённые документы остаются авторитетными; перевод названия документа не подтверждает наличие или официальный статус документа.
+
 ## `site`
 
 Validator и renderer требуют полноценную global model:
@@ -265,6 +277,6 @@ Optional `mobile` повторяет rendition fields и имеет собств
 
 `REQUIRED_ROUTES` — обязательное подмножество, а не полная allowlist. Оно объединяет 16 `CORE_REQUIRED_ROUTES`, 14 юридически обязательных `SVEDEN_REQUIRED_ROUTES` и 37 сохранённых `PRESERVED_INFORMATION_ROUTES`. Последняя группа содержит legacy `/sveden/ovz/`, институциональные и тематические адреса, нужные для передачи текущей информационной архитектуры; она не означает, что все эти страницы являются подразделами приказа № 1493.
 
-Итоговые routes: `/`, `Object.keys(pages)`, `newsItems[].href`, `events[].href`. В текущем local bundle это 73 HTML-маршрута: 67 из `REQUIRED_ROUTES` и шесть news routes. При подключении CMS route count остаётся динамическим. Missing required route, duplicate route или unsafe route — build error.
+Итоговые logical routes: `/`, `Object.keys(pages)`, `newsItems[].href`, `events[].href`. В текущем local bundle их 73: 67 из `REQUIRED_ROUTES` и шесть news routes. Default local build создаёт 219 наполненных HTML-документов: 73 без префикса, 73 под `/en` и 73 под `/zh`. При подключении CMS logical route count остаётся динамическим. Missing required route, duplicate/unsafe route или locale route parity mismatch — build error.
 
-Точный список находится в `src/content/required-routes.mjs`. При CMS mapping нельзя удалять ни один из 14 `SVEDEN_REQUIRED_ROUTES`; `/sveden/ovz/` сохраняется отдельно как legacy-совместимость, а институциональные страницы не должны ошибочно маркироваться обязательными подразделами специального раздела.
+Точный обязательный список находится в `src/content/required-routes.mjs`, а `docs/ROUTE-MAP.csv` перечисляет 73 logical routes один раз без дублирования языковых префиксов. При CMS mapping нельзя удалять ни один из 14 `SVEDEN_REQUIRED_ROUTES`; `/sveden/` и остальные русские адреса сохраняются без префикса, `/sveden/ovz/` сохраняется отдельно как legacy-совместимость, а институциональные страницы не должны ошибочно маркироваться обязательными подразделами специального раздела.

@@ -6,15 +6,15 @@
 
 В `dist/` входят:
 
-- физический `<route>/index.html` для каждого published route;
-- `404.html`;
-- `sitemap.xml`, `rss.xml`, `search-index.json`;
+- физический `<locale-route>/index.html` для каждого published logical route и включённой locale;
+- локализованные `404.html`: `/404.html`, `/en/404.html`, `/zh/404.html` в default local build;
+- общий `sitemap.xml` с `hreflang`, а также локализованные `rss.xml`, `search-index.json` и `manifest.webmanifest` в корне, `/en/` и `/zh/`;
 - `content-manifest.json` с adapter, route count, required routes, collection counts и media provenance/status;
 - CSS/JS с 12-символьным SHA-256 suffix;
 - content media в `/assets/media/` с 12-символьным hash содержимого;
 - стабильные first-party logo/favicon/manifest assets из `public/`.
 
-Общее число HTML-маршрутов динамическое: mandatory routes — только проверяемое подмножество, новости и события добавляются из `ContentBundle`. Build проверяет один `<h1>` на route, дубликаты, обязательные paths и отсутствие runtime-loader markers.
+Общее число logical routes динамическое: mandatory routes — только проверяемое подмножество, новости и события добавляются из `ContentBundle`. Текущий local bundle содержит 73 logical routes и по умолчанию создаёт 219 HTML-документов (`ru` без префикса, `en` под `/en`, `zh-CN` под `/zh`). Build проверяет один `<h1>` на route, дубликаты, обязательные paths, parity routes между locale, отсутствие неизвестной кириллицы в EN/ZH main content и отсутствие runtime-loader markers.
 
 ## Локальная production-сборка
 
@@ -46,10 +46,13 @@ SITE_URL=https://example.edu ALLOW_INDEXING=true CONTENT_ADAPTER=local npm run b
 ```bash
 CONTENT_ADAPTER=json \
 CMS_CONTENT_FILE=content/export.json \
+CONTENT_LOCALES=ru \
 SITE_URL=https://example.edu \
 ALLOW_INDEXING=true \
 npm run build
 ```
+
+`CONTENT_LOCALES` принимает comma-separated subset `ru,en,zh`. Для `CONTENT_ADAPTER=local` отсутствие переменной означает `ru,en,zh`; для внешнего `json` — только `ru` ради обратной совместимости. Указывать `ru,en,zh` для CMS можно после того, как adapter/export предоставляет полный проверенный перевод: встроенные exact-string каталоги покрывают текущий local bundle, а неизвестная кириллическая строка строго останавливает локализованную сборку.
 
 Не включайте `ALLOW_INDEXING=true`, пока canonical domain и право публикации контента не утверждены. Build дополнительно остановится, если хотя бы один media record имеет статус вне `owned`, `licensed` или `public-domain`. Если значение отсутствует или отличается от `true`, review-сборка разрешена, HTML получает `noindex, nofollow`, а generated `robots.txt` — `Disallow: /`. `public/robots.txt` и `public/manifest.webmanifest` копируются, но затем намеренно перезаписываются generated версиями.
 
@@ -72,7 +75,7 @@ Project settings:
 2. Production Branch — `main`.
 3. Node.js — 24.x.
 4. Framework preset — Other, если autodetect не распознал статический build.
-5. Environment variables — `CONTENT_ADAPTER`, optional `CMS_CONTENT_FILE`, `SITE_URL`, `ALLOW_INDEXING` отдельно для Preview/Production.
+5. Environment variables — `CONTENT_ADAPTER`, optional `CMS_CONTENT_FILE`, `CONTENT_LOCALES`, `SITE_URL`, `ALLOW_INDEXING` отдельно для Preview/Production.
 
 Для `CONTENT_ADAPTER=json` файл экспорта и его local media должны существовать внутри build checkout до `npm run build`. Сам Vercel adapter не обращается к CMS API. Храните JSON вне `public/`, потому что содержимое `public/` копируется в deployed `dist/` целиком. Если export формируется CI, используйте доверенный pre-build workflow и не печатайте секреты в logs.
 
@@ -84,7 +87,7 @@ Project settings:
 | `/assets/site.*` | `public, max-age=31536000, immutable` |
 | `/assets/images/*` | `public, max-age=3600, must-revalidate` |
 | `/assets/icons/*` | `public, max-age=86400, stale-while-revalidate=604800` |
-| `content-manifest.json`, `search-index.json` | `public, max-age=0, must-revalidate` |
+| `content-manifest.json`, `/search-index.json`, `/en/search-index.json`, `/zh/search-index.json` | `public, max-age=0, must-revalidate` |
 
 Immutable policy применяется только к content-hashed media/CSS/JS. Стабильные logo/favicon URL остаются обновляемыми.
 
@@ -97,6 +100,7 @@ SPA rewrite на `/index.html` запрещён: он создаст soft-404 и
 Обязательная семантика сервера:
 
 - `/about/` отдаёт `/about/index.html`;
+- `/en/about/` и `/zh/about/` отдают соответствующие локализованные `index.html`, а неизвестные адреса под `/en/` и `/zh/` — locale-specific `404.html` со статусом `404`;
 - существующие files сохраняют правильный MIME;
 - неизвестный URL возвращает HTTP `404` с `/404.html`;
 - нет fallback всех URL на `/index.html`;
@@ -186,8 +190,13 @@ curl -I https://<deployment>/education/
 curl -I https://<deployment>/news/
 curl -I https://<deployment>/sveden/
 curl -I https://<deployment>/sveden/common/
+curl -I https://<deployment>/en/sveden/common/
+curl -I https://<deployment>/zh/sveden/common/
 curl -I https://<deployment>/definitely-not-a-route/
+curl -I https://<deployment>/en/definitely-not-a-route/
 curl https://<deployment>/news/
+curl https://<deployment>/en/news/
+curl https://<deployment>/zh/news/
 curl https://<deployment>/content-manifest.json
 ```
 
@@ -195,7 +204,9 @@ curl https://<deployment>/content-manifest.json
 
 - все expected routes — `200 text/html`, unknown route — `404`;
 - HTML до JS содержит unique title, description, canonical, основной текст, breadcrumbs и один `h1`;
-- URL в canonical/sitemap/RSS построены из ожидаемого `SITE_URL`;
+- `html lang`, canonical, locale-preserving language links, `hreflang` и `x-default` соответствуют `ru`/`en`/`zh-CN`; `/sveden/` остаётся доступен без префикса;
+- URL в canonical/sitemap и каждом локализованном RSS построены из ожидаемого `SITE_URL`;
+- `/search-index.json`, `/en/search-index.json` и `/zh/search-index.json` содержат ссылки своей locale; каждая версия страницы подключает свой manifest и search index;
 - `robots.txt` и meta robots соответствуют `ALLOW_INDEXING`;
 - CSS, JS, favicon, logo и каждый `src/srcset` — `200` с корректным MIME, не HTML fallback;
 - media URL имеют `/assets/media/…<hash>…` и совпадают с manifest;
@@ -203,6 +214,7 @@ curl https://<deployment>/content-manifest.json
 - `content-manifest.json` counts соответствуют CMS export;
 - screenshots 390 и 1440 для home/news/education/sveden, `/sveden/managers/` и `/sitemap/`, плюс открытые mobile/desktop navigation и accessibility states;
 - редакционная сетка проверена с portrait, landscape, square и no-media карточкой.
+- основной контент EN/ZH не содержит непереведённую кириллицу; информационный перевод не обозначает русскоязычные юридические материалы официальными переводами.
 
 ## Git, promotion и rollback
 
