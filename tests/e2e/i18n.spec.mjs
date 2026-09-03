@@ -52,6 +52,28 @@ test('mobile language selector stays in the utility bar and keeps the news route
   await expect(languageSummary).toHaveAccessibleName('Current language: English. Choose a language');
   await expect(navigation.locator('.nav-language-item')).toBeHidden();
 
+  const utilityControlStyles = await page.locator('.utility-actions').evaluate((actions) => {
+    const search = actions.querySelector('[data-search-open]');
+    const accessibility = actions.querySelector('[data-access-open]');
+    const language = actions.querySelector('[data-utility-language-summary]');
+    return [search, accessibility, language].map((control) => {
+      const style = getComputedStyle(control);
+      const box = control.getBoundingClientRect();
+      return {
+        color: style.color,
+        fontSize: style.fontSize,
+        fontWeight: style.fontWeight,
+        height: Math.round(box.height),
+        borderWidth: style.borderTopWidth
+      };
+    });
+  });
+  expect(new Set(utilityControlStyles.map((style) => style.color)).size).toBe(1);
+  expect(new Set(utilityControlStyles.map((style) => style.fontSize)).size).toBe(1);
+  expect(new Set(utilityControlStyles.map((style) => style.fontWeight)).size).toBe(1);
+  expect(new Set(utilityControlStyles.map((style) => style.height)).size).toBe(1);
+  expect(utilityControlStyles.map((style) => style.borderWidth)).toEqual(['0px', '0px', '0px']);
+
   const utilityBox = await page.locator('.utility').boundingBox();
   const headerBox = await page.locator('.site-header').boundingBox();
   const languageBox = await languageSummary.boundingBox();
