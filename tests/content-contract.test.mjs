@@ -2,8 +2,8 @@ import assert from 'node:assert/strict';
 import { resolve } from 'node:path';
 import test from 'node:test';
 import { loadLocalContent } from '../src/content/adapters/local.mjs';
-import { ContentContractError } from '../src/content/contracts.mjs';
-import { loadContent } from '../src/content/load-content.mjs';
+import { LOCALIZED_CONTENT_FORMAT, ContentContractError } from '../src/content/contracts.mjs';
+import { loadContent, loadContentSet } from '../src/content/load-content.mjs';
 import { REQUIRED_ROUTES, SVEDEN_REQUIRED_ROUTES } from '../src/content/required-routes.mjs';
 import { assertIndexableMediaRights } from '../src/content/rights.mjs';
 import { collectPublicRoutes } from '../src/content/validate.mjs';
@@ -24,7 +24,36 @@ test('local adapter returns a validated CMS-neutral bundle', async () => {
     label: 'образования одновременно',
     details: ['Школа', 'Музыка', 'Балет']
   });
+  assert.deepEqual(
+    {
+      src: content.site.assets.logo.src,
+      width: content.site.assets.logo.width,
+      height: content.site.assets.logo.height
+    },
+    { src: '/assets/images/brhk-logo-full.png', width: 1705, height: 677 }
+  );
+  for (const route of ['/creative-industries/', '/ballet-for-all/']) {
+    assert.equal(content.programs.find((program) => program.href === route)?.primary, false, route);
+  }
   for (const route of REQUIRED_ROUTES) assert.ok(routes.has(route), route);
+});
+
+test('approved logo and additional education placement are immutable CMS boundaries', async () => {
+  const mutations = [
+    (raw) => { raw.site.assets.logo.src = '/assets/images/another-logo.png'; },
+    (raw) => { raw.site.assets.logo.width = 1704; },
+    (raw) => { raw.programs.find((item) => item.href === '/creative-industries/').primary = true; },
+    (raw) => { raw.programs = raw.programs.filter((item) => item.href !== '/ballet-for-all/'); }
+  ];
+
+  for (const mutate of mutations) {
+    const raw = structuredClone(await loadLocalContent());
+    mutate(raw);
+    await assert.rejects(
+      loadContent({ cwd: projectRoot, adapter: async () => raw }),
+      ContentContractError
+    );
+  }
 });
 
 test('home statistic details must be a non-empty list of labels', async () => {
@@ -108,6 +137,48 @@ test('mandatory disclosure classification cannot be downgraded', async () => {
   );
 });
 
+test('legacy disclosure compatibility and the exact mandatory set are immutable', async () => {
+  const mutations = [
+    (raw) => { raw.svedenSections = raw.svedenSections.filter((section) => section.href !== '/sveden/ovz/'); },
+    (raw) => { raw.svedenSections.find((section) => section.href === '/sveden/ovz/').group = 'mandatory'; },
+    (raw) => {
+      raw.svedenSections.push({
+        slug: 'extra-mandatory',
+        href: '/about/',
+        title: 'Not a statutory subsection',
+        group: 'mandatory'
+      });
+    }
+  ];
+
+  for (const mutate of mutations) {
+    const raw = structuredClone(await loadLocalContent());
+    mutate(raw);
+    await assert.rejects(
+      loadContent({ cwd: projectRoot, adapter: async () => raw }),
+      ContentContractError
+    );
+  }
+});
+
+test('special route renderer flags cannot be removed or disabled by a CMS export', async () => {
+  const mutations = [
+    (raw) => { delete raw.pages['/sveden/'].sveden; },
+    (raw) => { raw.pages['/gallery/'].gallery = false; },
+    (raw) => { raw.pages['/sitemap/'].siteMap = 'true'; }
+  ];
+
+  for (const mutate of mutations) {
+    const raw = structuredClone(await loadLocalContent());
+    mutate(raw);
+    await assert.rejects(
+      loadContent({ cwd: projectRoot, adapter: async () => raw }),
+      (error) => error instanceof ContentContractError
+        && error.message.includes('must be true for the required renderer')
+    );
+  }
+});
+
 test('published CMS collections may add routes without changing build code', async () => {
   const raw = structuredClone(await loadLocalContent());
   const template = raw.newsItems[0];
@@ -183,6 +254,7 @@ test('live CMS documents remain available after normalization', async () => {
     id: 'cms-document',
     title: 'CMS document',
     href: '/assets/documents/cms-document.pdf',
+    fileType: 'PDF',
     status: 'live'
   }];
   const content = await loadContent({ cwd: projectRoot, adapter: async () => raw });
@@ -193,8 +265,10 @@ test('live CMS documents remain available after normalization', async () => {
 test('unsafe CMS attachment, sveden document and source URLs are rejected', async () => {
   const cases = [
     (raw) => { raw.newsItems[0].attachments = [{ title: 'Unsafe', href: 'javascript:alert(1)' }]; },
+    (raw) => { raw.newsItems[0].attachments = [{ title: 'Not a file', href: 'tel:+73012212313' }]; },
     (raw) => { raw.newsItems[0].contentStatus = null; raw.newsItems[0].source = 'javascript:alert(1)'; },
-    (raw) => { raw.svedenSections[0].documents = [{ title: 'Unsafe', href: 'data:text/html,unsafe' }]; }
+    (raw) => { raw.svedenSections[0].documents = [{ title: 'Unsafe', href: 'data:text/html,unsafe' }]; },
+    (raw) => { raw.documents = [{ id: 'not-a-document', title: 'Not a document', href: 'mailto:docs@example.org' }]; }
   ];
 
   for (const mutate of cases) {
@@ -205,6 +279,32 @@ test('unsafe CMS attachment, sveden document and source URLs are rejected', asyn
       ContentContractError
     );
   }
+});
+
+test('events and documents require the title field consumed by their renderers', async () => {
+  const cases = [
+    (raw) => { raw.events = [{ id: 'name-only-event', name: 'Name only', href: '/events/name-only/' }]; },
+    (raw) => { raw.documents = [{ id: 'name-only-document', name: 'Name only', href: 'https://example.org/document.pdf' }]; }
+  ];
+
+  for (const mutate of cases) {
+    const raw = structuredClone(await loadLocalContent());
+    mutate(raw);
+    await assert.rejects(
+      loadContent({ cwd: projectRoot, adapter: async () => raw }),
+      (error) => error instanceof ContentContractError && error.message.includes('.title')
+    );
+  }
+});
+
+test('published document links require an explicit file type', async () => {
+  const raw = structuredClone(await loadLocalContent());
+  raw.documents = [{ id: 'unknown-type', title: 'Document', href: 'https://example.org/document' }];
+  await assert.rejects(
+    loadContent({ cwd: projectRoot, adapter: async () => raw }),
+    (error) => error instanceof ContentContractError
+      && error.message.includes('documents[0].fileType')
+  );
 });
 
 test('malformed page sections fail before template rendering', async () => {
@@ -223,7 +323,7 @@ test('draft nested attachments and sveden documents are filtered', async () => {
     { id: 'draft-attachment', title: 'Draft attachment', href: 'https://example.org/draft.pdf', status: 'draft' }
   ];
   raw.svedenSections[0].documents = [
-    { id: 'public-document', title: 'Public document', href: 'https://example.org/public.pdf', status: 'published' },
+    { id: 'public-document', title: 'Public document', href: 'https://example.org/public.pdf', fileType: 'PDF', status: 'published' },
     { id: 'draft-document', title: 'Draft document', href: 'https://example.org/draft.pdf', draft: true }
   ];
 
@@ -332,5 +432,240 @@ test('unsafe rich-text hrefs are rejected at the CMS content boundary', async ()
     loadContent({ cwd: projectRoot, adapter: async () => sveden }),
     (error) => error instanceof ContentContractError
       && error.message.includes('svedenSections[0].body[0].href')
+  );
+});
+
+test('bundle-per-locale exports preserve the plain bundle API and expose reviewed locale data', async () => {
+  const ru = structuredClone(await loadLocalContent());
+  ru.schemaVersion = '1.0.0';
+  const en = structuredClone(ru);
+  en.site.locale = 'en';
+  en.site.title = 'Reviewed CMS title that is not present in an exact-string catalog';
+  en.programs.reverse();
+  en.media.reverse();
+
+  const plainSet = await loadContentSet({ cwd: projectRoot, adapter: async () => ru });
+  assert.equal(plainSet.localized, false);
+  assert.deepEqual(Object.keys(plainSet.locales), ['ru']);
+  assert.equal((await loadContent({ cwd: projectRoot, adapter: async () => ru })).site.locale, 'ru');
+
+  const envelope = {
+    format: LOCALIZED_CONTENT_FORMAT,
+    defaultLocale: 'ru',
+    locales: { en, ru }
+  };
+  const localizedSet = await loadContentSet({ cwd: projectRoot, adapter: async () => envelope });
+  assert.equal(localizedSet.localized, true);
+  assert.deepEqual(Object.keys(localizedSet.locales), ['ru', 'en']);
+  assert.equal(localizedSet.locales.en.site.title, en.site.title);
+  assert.equal((await loadContent({ cwd: projectRoot, adapter: async () => envelope })).site.locale, 'ru');
+});
+
+test('bundle-per-locale exports enforce locale, route, identity and media parity', async () => {
+  async function rejectedByParity(mutate, message) {
+    const ru = structuredClone(await loadLocalContent());
+    ru.schemaVersion = '1.0.0';
+    const en = structuredClone(ru);
+    en.site.locale = 'en';
+    mutate(en);
+    const envelope = {
+      format: LOCALIZED_CONTENT_FORMAT,
+      defaultLocale: 'ru',
+      locales: { ru, en }
+    };
+    await assert.rejects(
+      loadContentSet({ cwd: projectRoot, adapter: async () => envelope }),
+      (error) => error instanceof ContentContractError && error.message.includes(message)
+    );
+  }
+
+  await rejectedByParity((en) => { en.site.locale = 'ru'; }, 'site.locale must equal en');
+  await rejectedByParity((en) => { en.newsItems[0].href = '/news/locale-only-route/'; }, 'public routes parity mismatch');
+  await rejectedByParity((en) => { en.newsItems[0].id = 'locale-only-id'; }, 'newsItems ids parity mismatch');
+  await rejectedByParity((en) => { en.newsItems[0].image = en.newsItems[1].image; }, 'media reference graph');
+  await rejectedByParity((en) => { en.media[0].width += 1; }, 'technical metadata');
+  await rejectedByParity((en) => { en.site.contacts.email = 'other@example.org'; }, 'site.contacts technical fields');
+  await rejectedByParity((en) => { en.media[0].rightsStatus = 'owned'; }, 'technical metadata');
+  await rejectedByParity((en) => { en.site.navigation[0].children[0].href = '/contacts/'; }, 'site href graph');
+  await rejectedByParity((en) => { en.pages['/about/'].structureOnly = true; }, 'pages renderer flags');
+
+  const linkedRu = structuredClone(await loadLocalContent());
+  linkedRu.newsItems[0].attachments = [{ id: 'program', title: 'Программа', href: 'https://example.org/program.pdf' }];
+  const linkedEn = structuredClone(linkedRu);
+  linkedEn.site.locale = 'en';
+  linkedEn.newsItems[0].attachments = [{ id: 'program', title: 'Programme', href: 'https://example.org/another.pdf' }];
+  await assert.rejects(
+    loadContentSet({
+      cwd: projectRoot,
+      adapter: async () => ({
+        format: LOCALIZED_CONTENT_FORMAT,
+        defaultLocale: 'ru',
+        locales: { ru: linkedRu, en: linkedEn }
+      })
+    }),
+    (error) => error instanceof ContentContractError && error.message.includes('linked document graph')
+  );
+
+  const ru = structuredClone(await loadLocalContent());
+  ru.schemaVersion = '1.0.0';
+  const en = structuredClone(ru);
+  en.site.locale = 'en';
+  delete en.schemaVersion;
+  await assert.rejects(
+    loadContentSet({
+      cwd: projectRoot,
+      adapter: async () => ({
+        format: LOCALIZED_CONTENT_FORMAT,
+        defaultLocale: 'ru',
+        locales: { ru, en }
+      })
+    }),
+    (error) => error instanceof ContentContractError
+      && error.message.includes('locales.en is missing required field schemaVersion')
+  );
+});
+
+test('plain ContentBundle is Russian; translated source data requires a locale envelope', async () => {
+  const raw = structuredClone(await loadLocalContent());
+  raw.site.locale = 'en';
+  await assert.rejects(
+    loadContent({ cwd: projectRoot, adapter: async () => raw }),
+    (error) => error instanceof ContentContractError
+      && error.message.includes('site.locale must equal ru for a plain ContentBundle')
+  );
+});
+
+test('sveden content compatibility field is validated before rendering', async () => {
+  const raw = structuredClone(await loadLocalContent());
+  raw.svedenSections[0].content = [{ type: 'unsupported-cms-block', value: 'hidden otherwise' }];
+  await assert.rejects(
+    loadContent({ cwd: projectRoot, adapter: async () => raw }),
+    (error) => error instanceof ContentContractError
+      && error.message.includes('svedenSections[0].content[0].type is not supported')
+  );
+});
+
+test('raw CMS collection shapes and workflow booleans fail before normalization can drop data', async () => {
+  const mutations = [
+    (raw) => { raw.events = { event: { id: 'lost-event' } }; },
+    (raw) => { raw.documents = [null]; },
+    (raw) => { raw.pages['/about/'] = null; },
+    (raw) => { raw.media[0] = null; },
+    (raw) => { raw.newsItems[0].attachments = [null]; },
+    (raw) => { raw.newsItems[0].draft = 'true'; },
+    (raw) => { raw.newsItems[0].published = 'false'; },
+    (raw) => { raw.newsItems[0].status = ''; },
+    (raw) => {
+      raw.newsItems[0].status = 'published';
+      raw.newsItems[0].publicationStatus = 'draft';
+    }
+  ];
+
+  for (const mutate of mutations) {
+    const raw = structuredClone(await loadLocalContent());
+    mutate(raw);
+    await assert.rejects(
+      loadContent({ cwd: projectRoot, adapter: async () => raw }),
+      (error) => error instanceof ContentContractError && error.message.includes('Raw content validation failed')
+    );
+  }
+});
+
+test('raw adapters cannot silently replace missing top-level collections with empty arrays', async () => {
+  const raw = structuredClone(await loadLocalContent());
+  delete raw.documents;
+
+  await assert.rejects(
+    loadContent({ cwd: projectRoot, adapter: async () => raw }),
+    (error) => error instanceof ContentContractError
+      && error.message.includes('missing required field documents')
+  );
+});
+
+test('optional CMS scalars consumed by templates cannot render object coercions', async () => {
+  const raw = structuredClone(await loadLocalContent());
+  raw.pages['/about/'].kicker = {};
+  raw.pages['/about/'].seoTitle = {};
+  raw.newsItems[0].date = {};
+  raw.newsItems[0].coverCaption = {};
+  raw.newsItems[0].sourceLabel = {};
+  raw.newsItems[0].gallery = [{ image: raw.media[0].id, alt: 'Malformed compact fixture', compact: 'true' }];
+  raw.events = [{
+    id: 'malformed-event-scalars',
+    title: 'Malformed event scalar fixture',
+    href: '/events/malformed-event-scalars/',
+    coverImage: raw.media[0].id,
+    description: {},
+    category: {},
+    date: {},
+    seoTitle: {},
+    coverCaption: {},
+    alt: {}
+  }];
+  raw.employees = [{
+    id: 'malformed-employee-scalars',
+    name: 'Malformed employee scalar fixture',
+    role: {},
+    department: {},
+    alt: {}
+  }];
+
+  const expectedIssues = [
+    'pages["/about/"].kicker',
+    'pages["/about/"].seoTitle',
+    'newsItems[0].date',
+    'newsItems[0].coverCaption',
+    'newsItems[0].sourceLabel',
+    'newsItems[0].gallery[0].compact',
+    'events[0].description',
+    'events[0].category',
+    'events[0].date',
+    'events[0].seoTitle',
+    'events[0].coverCaption',
+    'events[0].alt',
+    'employees[0].role',
+    'employees[0].department',
+    'employees[0].alt'
+  ];
+
+  await assert.rejects(
+    loadContent({ cwd: projectRoot, adapter: async () => raw }),
+    (error) => error instanceof ContentContractError
+      && expectedIssues.every((field) => error.message.includes(field))
+  );
+
+  const malformedSiteGallery = structuredClone(await loadLocalContent());
+  malformedSiteGallery.site.gallery[0].compact = 'true';
+  await assert.rejects(
+    loadContent({ cwd: projectRoot, adapter: async () => malformedSiteGallery }),
+    (error) => error instanceof ContentContractError
+      && error.message.includes('site.gallery[0].compact')
+  );
+});
+
+test('unknown rich-text blocks fail instead of disappearing from CMS output', async () => {
+  const raw = structuredClone(await loadLocalContent());
+  raw.newsItems[0].body = [{ type: 'cmsWidget', payload: 'not supported' }];
+
+  await assert.rejects(
+    loadContent({ cwd: projectRoot, adapter: async () => raw }),
+    (error) => error instanceof ContentContractError
+      && error.message.includes('newsItems[0].body[0].type is not supported')
+  );
+});
+
+test('every disclosure record must have a page route that the generator can render', async () => {
+  const raw = structuredClone(await loadLocalContent());
+  raw.svedenSections.push({
+    slug: 'cms-only-section',
+    href: '/sveden/cms-only-section/',
+    title: 'CMS-only section',
+    group: 'legacy'
+  });
+
+  await assert.rejects(
+    loadContent({ cwd: projectRoot, adapter: async () => raw }),
+    (error) => error instanceof ContentContractError
+      && error.message.includes('must have a matching pages entry')
   );
 });

@@ -14,7 +14,7 @@ Frontend и build-time integration boundary реализованы, полная
 - подтверждённый основной canonical domain;
 - финальные разрешения и согласия по медиаматериалам.
 
-Локальная сборка сейчас содержит 73 публичных HTML-маршрута: 67 адресов из `REQUIRED_ROUTES` и шесть `source-linked` news routes. Число 73 описывает текущий snapshot, а не предел: CMS может добавлять опубликованные news/event pages, но не может удалить `REQUIRED_ROUTES`.
+Локальная сборка сейчас содержит 73 logical routes: 67 адресов из `REQUIRED_ROUTES` и шесть `source-linked` news routes. При трёх locale это 219 публичных HTML-документов. Число 73 описывает текущий snapshot, а не предел: CMS может добавлять опубликованные news/event pages, но не может удалить `REQUIRED_ROUTES`.
 
 ## Матрица текущих данных
 
@@ -86,7 +86,7 @@ Raw snapshot хранить read-only в защищённом migration storage.
 - сохранять `structureOnly: true`, пока для страницы не получены и не приняты официальные сведения;
 - оставлять ШКИ и «Балет для всех» внутри `programs` с `primary: false`;
 - сохранять все routes из `src/content/required-routes.mjs`;
-- передавать `group: 'mandatory'` для всех 14 `SVEDEN_REQUIRED_ROUTES` и `group: 'legacy'` для `/sveden/ovz/`;
+- передавать `group: 'mandatory'` ровно для 14 `SVEDEN_REQUIRED_ROUTES`, не добавлять пятнадцатый mandatory route и обязательно сохранять `/sveden/ovz/` с `group: 'legacy'`; любые другие дополнительные записи также маркировать только как legacy;
 - не создавать отдельную обязательную копию доступной среды на `/sveden/ovz/`: фактические сведения относятся к объединённому `/sveden/objects/`;
 - разделять руководство `/sveden/managers/` и педагогический состав `/sveden/employees/`;
 - учитывать приказ Рособрнадзора № 920 от 30.04.2026, зарегистрированный под № 86689 и действующий с 01.09.2026, при mapping сведений и документов о материально-техническом обеспечении, доступной среде, общежитиях/интернатах и предоставлении помещений;
@@ -153,21 +153,28 @@ client-provided-pending-final-rights-check
 Для каждой партии:
 
 ```bash
-CONTENT_ADAPTER=json CMS_CONTENT_FILE=content/export.json npm run test
-npm run test:e2e
-npm run test:a11y
-npm run test:visual
+CONTENT_ADAPTER=json \
+CMS_CONTENT_FILE=content/export.json \
+CONTENT_LOCALES=ru \
+ALLOW_INDEXING=false \
+npm run verify:cms
 ```
 
-Сверить CMS snapshot → JSON → `dist/content-manifest.json`:
+`verify:cms` не сравнивает CMS-тексты с текущими repository fixtures: он валидирует выбранный export, собирает его и проверяет все generated routes/internal files по `content-manifest.json`. Полный `npm run verify` запускается отдельно без `CONTENT_*` overrides как regression принятого frontend snapshot. CMS Preview дополнительно проходит HTTP, browser, accessibility и visual приёмку с фактическими данными.
+
+По `dist/content-manifest.json` сверить:
 
 - counts всех collections;
 - список routes и required subset;
 - разбиение required subset на 14 mandatory `/sveden/*`, legacy `/sveden/ovz/` и остальные сохранённые институциональные/тематические routes;
+- media ID/provenance/originalName/rightsStatus; точный source сверяется по внешнему migration register, потому что публичный manifest его не раскрывает;
+- generated media paths и отсутствие внешних image URLs.
+
+Отдельно во внешнем приватном migration register и content diff сверить то, чего публичный manifest намеренно не содержит:
+
 - first/last publication dates;
 - dropped drafts и причину каждого исключения;
-- media ID/provenance/originalName/rightsStatus; точный source сверяется по внешнему migration register, потому что публичный manifest его не раскрывает;
-- files/checksums и отсутствие внешних image URLs;
+- source URL, files/checksums и исходные CMS IDs;
 - exact sample records, включая rich text, documents и no-media cards.
 
 Visual regression дополнить content stress cases: 1, 2, 3, 6 и 20 news cards; portrait/landscape/square; очень длинный title; отсутствующий optional cover.

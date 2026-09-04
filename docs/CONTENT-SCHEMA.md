@@ -6,6 +6,8 @@
 
 JSON adapter принимает полный объект:
 
+Следующий JSON — сокращённый, намеренно не собираемый перечень top-level полей. Полный валидный reference bundle создаётся командой `npm run content:reference`.
+
 ```json
 {
   "schemaVersion": "1.0.0",
@@ -21,7 +23,7 @@ JSON adapter принимает полный объект:
 }
 ```
 
-Все девять полей после нормализации присутствуют обязательно. `pages` — объект, остальные коллекции — массивы. Для совместимости normalizer также принимает:
+Все поля исходного bundle присутствуют обязательно: отсутствие коллекции считается ошибкой adapter/export и не заменяется молча пустым массивом. `pages` — объект, остальные коллекции — массивы. Для совместимости normalizer также принимает:
 
 - `pages` как массив записей с `route`, `href` или `path`;
 - `news` вместо `newsItems`;
@@ -31,6 +33,24 @@ JSON adapter принимает полный объект:
 
 В новом экспорте следует использовать канонические имена выше.
 
+Для CMS с собственными переводами поддерживается внешний envelope `brhk-content-locales-v1`:
+
+Следующий JSON также является сокращённым, намеренно не собираемым каркасом: каждое значение `locales` в реальном export должно быть полным валидным bundle из reference-примера.
+
+```json
+{
+  "format": "brhk-content-locales-v1",
+  "defaultLocale": "ru",
+  "locales": {
+    "ru": { "schemaVersion": "1.0.0", "site": {}, "pages": {}, "programs": [], "newsItems": [], "events": [], "employees": [], "documents": [], "svedenSections": [], "media": [] },
+    "en": { "schemaVersion": "1.0.0", "site": {}, "pages": {}, "programs": [], "newsItems": [], "events": [], "employees": [], "documents": [], "svedenSections": [], "media": [] },
+    "zh": { "schemaVersion": "1.0.0", "site": {}, "pages": {}, "programs": [], "newsItems": [], "events": [], "employees": [], "documents": [], "svedenSections": [], "media": [] }
+  }
+}
+```
+
+`defaultLocale` строго равен `ru`, русский bundle обязателен, остальные ключи ограничены `en` и `zh`. Каждый bundle отдельно соответствует схеме ниже и имеет совпадающий `site.locale`. Между locale должны совпадать page/public routes, IDs всех коллекций, технические route/date/workflow поля, телефоны/email, document relations, media reference graph, provenance/rights и параметры media files. Переводимыми остаются редакционные тексты, alt, credit-подписи и SEO metadata.
+
 ## Общие правила
 
 - `schemaVersion` строго равен `1.0.0`.
@@ -38,7 +58,8 @@ JSON adapter принимает полный объект:
 - `id`/`slug` — 1–128 ASCII-символов: буквы, цифры, `.`, `_`, `-`; первый символ — буква или цифра.
 - Дата — реальная календарная ISO date `YYYY-MM-DD` либо timezone-qualified ISO datetime.
 - Неизвестное значение — `null` или отсутствие optional field; нельзя придумывать правдоподобный placeholder.
-- `draft: true`, `published: false` и explicit status вне `published`/`live` удаляются до validation/render.
+- `draft`/`published` при наличии обязаны быть boolean, а `status`/`publicationStatus` — непустой строкой; строковые `"true"`/`"false"` отклоняются до фильтрации. Если CMS передаёт оба status-поля, их значения после trim/case normalization обязаны совпадать, иначе export отклоняется как неоднозначный.
+- `draft: true`, `published: false` и любое из явно заданных status-полей вне `published`/`live` удаляют запись до content validation/render; malformed collection/record shape отклоняется ещё до normalizer и не может молча исчезнуть вместе с фильтрацией.
 - Запись без workflow metadata считается опубликованной только ради совместимости с локальным adapter. CMS export должен передавать статус явно.
 - Raw HTML не является разрешённым rich-text форматом.
 
@@ -48,7 +69,7 @@ JSON adapter принимает полный объект:
 
 В текущем локальном источнике перевод пользовательских строк выполняется `src/i18n/localize.mjs` по точному совпадению с `src/i18n/catalogs/en.mjs` или `zh.mjs`. UI-подписи живут отдельно в `src/i18n/config.mjs`; `render-context.mjs` и `routing.mjs` дают шаблонам сообщения и locale-aware ссылки. Неизвестная кириллическая строка в EN/ZH main content считается ошибкой сборки, поэтому exact-string каталоги нельзя считать fallback-механизмом для произвольного CMS-контента.
 
-`CONTENT_LOCALES` принимает subset `ru,en,zh`. Для `CONTENT_ADAPTER=local` default — все три locale; для внешнего JSON default — `ru`, чтобы существующие экспорты схемы `1.0.0` продолжали собираться. EN/ZH для CMS включаются только после полного перевода всех публикуемых текстовых полей и редакционной проверки. Текущий контракт не вводит новую CMS и не определяет vendor-specific locale schema: будущий adapter должен свести локализованные записи к стабильным logical routes/ID/media и только затем передать их генератору.
+`CONTENT_LOCALES` принимает subset `ru,en,zh`. Plain `ContentBundle` обязан иметь `site.locale: "ru"`: для переводов нужен locale envelope. Для `CONTENT_ADAPTER=local` default — все три locale; для plain JSON default — `ru`, чтобы существующие экспорты схемы `1.0.0` продолжали собираться; для locale envelope default — все переданные bundles. Запрос отсутствующей locale останавливает build. EN/ZH для CMS включаются только после полного перевода публикуемых полей и редакционной проверки.
 
 Logical routes не могут начинаться с зарезервированных сегментов `/en/` или `/zh/`: эти префиксы добавляет только генератор. Root-relative ссылки на файлы без завершающего `/` (например, `/uploads/order.pdf`) считаются общими deployment assets и не получают языковой префикс; принимающая CMS/build-цепочка обязана фактически положить такой файл в соответствующий публичный путь.
 
@@ -63,7 +84,7 @@ Validator и renderer требуют полноценную global model:
 | `name`, `shortName`, `title`, `description` | non-empty string |
 | `locale`, `legalName`, `themeColor`, `utilityLabel` | non-empty string |
 | `baseUrl` | HTTPS URL; HTTP допустим только для localhost |
-| `assets.logo` | `{src, width, height, alt}`; first-party URL и positive intrinsic dimensions |
+| `assets.logo` | approved frontend-owned `{src, width, height, alt}`; `src=/assets/images/brhk-logo-full.png`, `1705×677`, локализуемый non-empty `alt` |
 | `navigation` | обязательный array из `NavItem`; поддерживает один уровень `children` для серверно отрендеренного иерархического меню |
 | `utilityNavigation`, `quickLinks`, `sideNavigation`, `footerNavigation`, `legalNavigation` | обязательные плоские arrays из `NavItem` |
 | `usefulLinks`, `socialLinks` | плоские `NavItem[]` только с HTTPS URL; ради совместимости со схемой `1.0.0` отсутствующее поле нормализуется в `[]`; `usefulLinks` формирует карточки перед футером, `socialLinks` — ссылки колледжа в футере |
@@ -118,7 +139,7 @@ Validator и renderer требуют полноценную global model:
 }
 ```
 
-Validation требует безопасный уникальный route, `title` и `description`. Renderer понимает `kicker`, optional `image` media ID, `sections`, `gallery`, `documents`, `sveden`, `seoTitle`, boolean `structureOnly`, boolean `siteMap` и специальные страницы `/education/`, `/news/`.
+Validation требует безопасный уникальный route, `title`, `description` и array `sections` (он может быть пустым). Renderer понимает `kicker`, optional `image` media ID, boolean `gallery`, `documents`, boolean `sveden`, `seoTitle`, boolean `structureOnly`, boolean `siteMap` и специальные страницы `/education/`, `/news/`. Флаги специальных renderer-контрактов обязательны: `/sveden/` требует `sveden: true`, `/gallery/` — `gallery: true`, `/sitemap/` — `siteMap: true`; CMS export не может удалить или отключить их.
 
 `structureOnly: true` означает, что утверждённое фактическое содержание не передано. Renderer в этом случае показывает явное предупреждение и не подменяет данные вымышленными документами, ссылками, ФИО или датами. `siteMap: true` включает серверно отрендеренную иерархию `site.navigation`; сейчас этот флаг используется на `/sitemap/`.
 
@@ -141,7 +162,7 @@ Validation требует безопасный уникальный route, `titl
 }
 ```
 
-Обязательны unique `id`, safe `href`, `code`, `type`, `title`, `description`, существующий media ID `image`, содержательный `imageAlt` и boolean `primary`. `primary: true` выводится как основная программа; `false` — внутри группы дополнительных программ. ШКИ и «Балет для всех» сохраняются как `primary: false`, а не выносятся в «Новые проекты».
+Обязательны unique `id`, safe `href`, `code`, `type`, `title`, `description`, существующий media ID `image`, содержательный `imageAlt` и boolean `primary`. `primary: true` выводится как основная программа; `false` — внутри группы дополнительных программ. Контракт требует записи с маршрутами `/creative-industries/` и `/ballet-for-all/` и сохраняет обе как `primary: false`: ШКИ и «Балет для всех» не выносятся в «Новые проекты».
 
 ## `newsItems`
 
@@ -152,22 +173,22 @@ Validation требует безопасный уникальный route, `titl
 | `title`, `excerpt`, `category` | required non-empty strings |
 | `publishedAt` | required ISO date или timezone-qualified datetime; оба формата корректно преобразуются в RSS `pubDate` |
 | `updatedAt` | optional ISO date/datetime |
-| `date` | локализованная UI-подпись; не используется для сортировки |
+| `date` | optional string: локализованная UI-подпись; не используется для сортировки |
 | `body` | required field; string, rich-text block array или `null` |
 | `featured` | required boolean |
 | `editorialVariant` | `featured`, `wide`, `portrait`, `square`, `standard` или `null` |
 | `image`, `coverImage` | optional media ID; renderer принимает оба compatibility-поля |
 | `alt`, `coverAlt` | содержательный alt; обязателен при наличии cover |
 | `imageWidth`, `imageHeight` | positive integer при наличии cover |
-| `coverCaption` | optional visible caption |
-| `author` | optional; current renderer не выводит |
+| `coverCaption` | optional string: visible caption |
+| `author` | optional string; current renderer не выводит |
 | `gallery` | array `{image, alt, caption?, compact?}` или `null`; media ID проверяется и галерея выводится в статье |
 | `attachments` | array `{title, href}` или `null`; draft records фильтруются, URL проверяется |
-| `seoTitle`, `seoDescription` | string или `null` |
+| `seoTitle`, `seoDescription` | optional string или `null` |
 | `source`, `sourceLabel` | обязательный HTTPS source и подпись при `contentStatus: source-linked` |
 | workflow fields | `status`, `publicationStatus`, `published`, `draft` |
 
-Если `editorialVariant` равен `null`, карточка выбирает portrait/landscape/square по `imageWidth:imageHeight` (или intrinsic размерам media). Запись без cover получает намеренную typographic no-media card; чужое изображение не подставляется.
+Если `editorialVariant` равен `null`, карточка выбирает portrait/landscape/square по обязательным при cover `imageWidth:imageHeight`; renderer имеет защитный fallback на intrinsic размеры media, но валидный CMS export всё равно передаёт оба поля. Запись без cover получает намеренную typographic no-media card; чужое изображение не подставляется.
 
 Текущие шесть локальных записей имеют `body: null` и `contentStatus: 'source-linked'`; это карточки со ссылкой на источник, не перенесённые статьи.
 
@@ -185,23 +206,23 @@ Validation требует безопасный уникальный route, `titl
 ]
 ```
 
-Heading normalizes to `h2`, кроме явного level `3`. Link разрешён только root-relative или HTTPS. Текст экранируется; unsafe link и неизвестный block не рендерятся.
+Heading normalizes to `h2`, кроме явного level `3`. Link разрешён только root-relative или HTTPS. Текст экранируется; unsafe link, неизвестный type и неполный block останавливают validation до рендера.
 
 ## `events`
 
-Контракт проверяет unique `id`, `title`/`name`, optional ID-like `slug`, обязательный safe `href` и ISO fields `publishedAt`, `updatedAt`, `startsAt`, `endsAt`. Event renderer использует `href`, `title`, `description`, `category`, `date`/`startsAt`, `body`, cover fields, SEO и attachments.
+Контракт проверяет unique `id`, обязательный `title`, optional ID-like `slug`, обязательный safe `href` и ISO fields `publishedAt`, `updatedAt`, `startsAt`, `endsAt`. Используемые renderer поля `description`, `category`, локализованный `date`, `seoTitle`, `seoDescription`, `coverCaption`, `alt` и `coverAlt` при наличии обязаны быть строками; cover требует непустой alt. Event renderer также поддерживает allowlist `body` и проверенные attachments.
 
 Build выводит опубликованные records списком на `/events/` и создаёт отдельную HTML-страницу для каждого `href`. Локальная коллекция пуста, потому что подтверждённых событий нет.
 
 ## `employees`
 
-Validator принимает unique `id`, `title` или `name` и optional `image`/`photo` media ID. `/sveden/employees/` выводит список из `name`/`title`, optional `role`/`position`, `department`, photo и alt. Отдельных employee detail routes нет. Локальная коллекция пуста; production fields всё равно нужно согласовать до импорта.
+Validator принимает unique `id`, `title` или `name` и optional `image`/`photo` media ID. Поля `role`, `position`, `department` и `alt` при наличии обязаны быть строками. `/sveden/employees/` сначала выводит проверенные `body`/`content`, `sections` и `documents` совпавшей записи `svedenSections[]`, затем список сотрудников. Ни одна из двух моделей не скрывает другую. Отдельных employee detail routes нет. Локальная коллекция пуста; production fields всё равно нужно согласовать до импорта.
 
 ## `documents`
 
-Validator принимает unique `id`, `title` или `name`, optional ISO `publishedAt`/`updatedAt`, optional safe root-relative/HTTPS/`mailto:`/`tel:` `href` и optional `image`/`thumbnail` media ID. `/documents/` публикует прошедшую publication normalization запись с непустым `href`; это включает `published` и `live`. Renderer также отображает `fileType` и `updatedAt`.
+Validator принимает unique `id`, обязательный `title`, optional ISO `publishedAt`/`updatedAt`, optional safe root-relative/HTTPS `href` и optional `image`/`thumbnail` media ID. При наличии `href` обязателен non-empty `fileType`, чтобы интерфейс не придумывал тип файла. `/documents/` публикует прошедшую publication normalization запись с `href`; это включает `published` и `live`, причём structured collection выводится даже без optional placeholder-поля `pages['/documents/'].documents`. Renderer также отображает `fileType` и `updatedAt`.
 
-Локальная structured collection пуста. Не добавляйте record без настоящего файла, реквизитов, размера, MIME, provenance и accessibility status.
+Локальная structured collection пуста. Схема `1.0.0` проверяет только перечисленные выше frontend-поля; реквизиты, byte size, точный MIME, checksum, provenance и accessibility status пока обязательны во внешнем migration register/приёмке, а не притворно валидируются этим контрактом. Не публикуйте record, пока эти сведения не проверены владельцем контента.
 
 ## `svedenSections`
 
@@ -214,11 +235,11 @@ Validator принимает unique `id`, `title` или `name`, optional ISO `p
 }
 ```
 
-Обязательны unique `slug`, safe unique `href`, `title` и `group`. Допустимы только `group: 'mandatory'` и `group: 'legacy'`. Набор должен содержать все 14 route из `SVEDEN_REQUIRED_ROUTES`, причём каждый из них обязан иметь `group: 'mandatory'`; дополнительные записи допустимы. Локально пятнадцатая запись `/sveden/ovz/` имеет `group: 'legacy'` и сохраняет прежний адрес, направляя к объединённому `/sveden/objects/`. Она не считается пятнадцатым обязательным подразделом.
+Обязательны unique `slug`, safe unique `href`, `title` и `group`. Каждый `href` обязан иметь matching key в `pages`, иначе генератор не сможет выпустить страницу. Допустимы только `group: 'mandatory'` и `group: 'legacy'`. Набор `mandatory` обязан точно совпадать с 14 route из `SVEDEN_REQUIRED_ROUTES`: удалить, понизить или добавить пятнадцатый mandatory route нельзя. Дополнительные записи допустимы только с `group: 'legacy'`. Запись `/sveden/ovz/` сама обязательна как legacy-совместимость и сохраняет прежний адрес, направляя к объединённому `/sveden/objects/`; она не считается пятнадцатым обязательным подразделом.
 
 Для совпавшего детального route renderer использует optional `body`/`content` rich text, `sections` в формате page card grid и `documents`; если они пусты, отображается page model из `pages`. Все 15 текущих маршрутов имеют server-rendered HTML, но страницы без официальных материалов помечены `structureOnly: true`.
 
-Nested `documents` проверяются как records с обязательными `title` и безопасным `href`; draft/unpublished элементы фильтруются normalizer. Optional `sections` проверяются как пары `[title, description]`, а `body`/`content` проходят allowlist rich-text renderer с экранированием. Дополнительные поля конкретной CMS всё равно следует проверять в её доверенном adapter.
+Nested `documents` проверяются как records с обязательными `title`, `fileType` и безопасным `href`; draft/unpublished элементы фильтруются normalizer. Optional `sections` проверяются как пары `[title, description]`, а `body`/`content` проходят allowlist rich-text renderer с экранированием. Дополнительные поля конкретной CMS всё равно следует проверять в её доверенном adapter.
 
 ## `media`
 

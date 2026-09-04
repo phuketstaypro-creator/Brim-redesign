@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join, resolve, sep } from 'node:path';
-import { loadContent } from './src/content/load-content.mjs';
+import { loadContentSet } from './src/content/load-content.mjs';
 import { materializeMedia } from './src/content/media.mjs';
 import { REQUIRED_ROUTES, missingRequiredRoutes } from './src/content/required-routes.mjs';
 import { assertIndexableMediaRights } from './src/content/rights.mjs';
@@ -136,17 +136,38 @@ mkdirSync(assetsRoot, { recursive: true });
 assertStableAssets();
 cpSync(publicRoot, distRoot, { recursive: true });
 
-const sourceContent = await loadContent({ env: process.env, cwd: projectRoot });
+const contentSet = await loadContentSet({ env: process.env, cwd: projectRoot });
+const sourceContent = contentSet.locales[contentSet.defaultLocale];
 const adapterName = String(process.env.CONTENT_ADAPTER || 'local').toLowerCase();
 const requestedLocales = String(process.env.CONTENT_LOCALES || '')
   .split(',')
   .map((locale) => locale.trim().toLowerCase())
   .filter(Boolean);
-const buildLocaleIds = requestedLocales.length ? [...new Set(requestedLocales)] : adapterName === 'local' ? [...LOCALE_IDS] : ['ru'];
+const buildLocaleIds = requestedLocales.length
+  ? [...new Set(requestedLocales)]
+  : contentSet.localized
+    ? Object.keys(contentSet.locales)
+    : adapterName === 'local'
+      ? [...LOCALE_IDS]
+      : ['ru'];
 const unsupportedLocales = buildLocaleIds.filter((locale) => !LOCALE_IDS.includes(locale));
 if (unsupportedLocales.length) throw new Error(`Unsupported CONTENT_LOCALES: ${unsupportedLocales.join(', ')}`);
+const unavailableLocales = contentSet.localized
+  ? buildLocaleIds.filter((locale) => !Object.hasOwn(contentSet.locales, locale))
+  : [];
+if (unavailableLocales.length) {
+  throw new Error(`CONTENT_LOCALES not supplied by the localized CMS export: ${unavailableLocales.join(', ')}`);
+}
 const allowIndexing = String(process.env.ALLOW_INDEXING || '').toLowerCase() === 'true';
-assertIndexableMediaRights(sourceContent.media, { allowIndexing });
+for (const locale of buildLocaleIds) {
+  const localeContent = contentSet.localized ? contentSet.locales[locale] : sourceContent;
+  try {
+    assertIndexableMediaRights(localeContent.media, { allowIndexing });
+  } catch (error) {
+    error.message = `${locale}: ${error.message}`;
+    throw error;
+  }
+}
 
 const css = `${readFileSync(join(projectRoot, 'src/styles/main.css'), 'utf8')}\n${readFileSync(join(projectRoot, 'src/styles/editorial.css'), 'utf8')}`;
 const client = readFileSync(join(projectRoot, 'src/client/app.js'), 'utf8');
@@ -162,7 +183,9 @@ const locale404Documents = new Map();
 
 for (const locale of buildLocaleIds) {
   configureRenderLocale(locale, buildLocaleIds);
-  const content = localizeContent(sourceContent, locale);
+  const content = contentSet.localized
+    ? structuredClone(contentSet.locales[locale])
+    : localizeContent(sourceContent, locale);
   const site = {
     ...content.site,
     canonicalBase: content.site.baseUrl,
@@ -237,9 +260,12 @@ const totalRouteCount = localeBuilds.reduce((count, build) => count + build.rout
 write('content-manifest.json', `${JSON.stringify({
   schemaVersion: sourceContent.schemaVersion,
   adapter: adapterName,
+  contentFormat: contentSet.format,
   locales: buildLocaleIds,
   logicalRouteCount: referenceLogicalRoutes.length,
   routeCount: totalRouteCount,
+  logicalRoutes: referenceLogicalRoutes,
+  publicRoutes: localeBuilds.flatMap((build) => build.routes),
   requiredRoutes: REQUIRED_ROUTES,
   collections: {
     pages: Object.keys(sourceContent.pages).length,

@@ -46,7 +46,7 @@ CONTENT_ADAPTER=local npm run build
 
 ### `json`
 
-`src/content/adapters/json.mjs` читает полный JSON-экспорт:
+`src/content/adapters/json.mjs` читает полный JSON-экспорт. Для одного русского набора корень файла — обычный `ContentBundle` с `site.locale: "ru"`; plain bundle с другой locale отклоняется, для переводов используется envelope ниже:
 
 ```bash
 CONTENT_ADAPTER=json CMS_CONTENT_FILE=content/export.json npm run build
@@ -59,11 +59,29 @@ CONTENT_ADAPTER=json CMS_CONTENT_FILE=content/export.json npm run build
 - максимальный размер — 25 MiB;
 - корень JSON должен быть объектом;
 - JavaScript из environment variable не импортируется и не выполняется;
-- JSON должен содержать полный bundle, а не частичный patch.
+- JSON должен содержать полный bundle, а не частичный patch; отсутствие любой top-level коллекции останавливает validation вместо молчаливой замены на `[]`.
 
 Размещайте export, например, в `content/export.json`, но никогда не внутри `public/`: build копирует `public/` целиком в `dist/`. JSON adapter сам не публикует файл, однако файл, ошибочно положенный в `public/`, станет публичным обычным asset.
 
-Встроенного удалённого API adapter нет. Практичный первый способ интеграции — получить CMS export отдельным доверенным CI-шагом, положить JSON и разрешённые media files внутрь checkout, затем выполнить обычную сборку. Если нужен прямой API, напишите отдельный доверенный модуль, вызывающий `loadContent({ adapter })` функцией; не добавляйте путь к произвольному модулю в публично управляемую environment variable.
+Для CMS, уже хранящей переводы, тот же adapter принимает opt-in envelope. Каждое значение `locales` — самостоятельный полный `ContentBundle`, уже переведённый редакцией CMS:
+
+Следующий JSON — сокращённый, намеренно не собираемый каркас envelope. Получите полный валидный русский reference bundle командой `npm run content:reference`, затем сопоставьте такие же полные bundles для каждой передаваемой locale.
+
+```json
+{
+  "format": "brhk-content-locales-v1",
+  "defaultLocale": "ru",
+  "locales": {
+    "ru": { "schemaVersion": "1.0.0", "site": {}, "pages": {}, "programs": [], "newsItems": [], "events": [], "employees": [], "documents": [], "svedenSections": [], "media": [] },
+    "en": { "schemaVersion": "1.0.0", "site": {}, "pages": {}, "programs": [], "newsItems": [], "events": [], "employees": [], "documents": [], "svedenSections": [], "media": [] },
+    "zh": { "schemaVersion": "1.0.0", "site": {}, "pages": {}, "programs": [], "newsItems": [], "events": [], "employees": [], "documents": [], "svedenSections": [], "media": [] }
+  }
+}
+```
+
+Envelope требует `defaultLocale: "ru"`, явный русский bundle и только ключи `ru`, `en`, `zh`. `site.locale` каждого bundle обязан совпадать с ключом. Все bundles проходят обычные normalization/validation, а затем cross-locale parity: одинаковые page/public routes, stable collection IDs, slug/href/date/workflow fields, телефоны/email, document relations, media IDs/reference graph, provenance/rights и технические параметры файлов. Пользовательские тексты, alt, credit-подписи и SEO metadata могут отличаться. Неполный перевод не подменяется русским и останавливает сборку при запросе этой locale.
+
+Встроенного удалённого API adapter нет. Практичный первый способ интеграции — получить CMS export отдельным доверенным CI-шагом, положить JSON и разрешённые media files внутрь checkout, затем выполнить обычную сборку. Если нужен прямой API, добавьте доверенный adapter в `src/content/adapters/`, статически зарегистрируйте его имя и import в `src/content/load-content.mjs`, добавьте имя в `SUPPORTED_CONTENT_ADAPTERS` и покройте полный build отдельным тестом по образцу JSON adapter. Не добавляйте путь к произвольному модулю в environment variable и не вызывайте adapter отдельным скриптом, который обходит `build.mjs`.
 
 ## Environment contract
 
@@ -71,7 +89,7 @@ CONTENT_ADAPTER=json CMS_CONTENT_FILE=content/export.json npm run build
 |---|---|
 | `CONTENT_ADAPTER` | `local` по умолчанию; второе допустимое значение — `json` |
 | `CMS_CONTENT_FILE` | Путь внутри проекта; используется только адаптером `json` |
-| `CONTENT_LOCALES` | Comma-separated subset `ru,en,zh`; `local` без значения собирает все три locale, внешний `json` — только `ru` |
+| `CONTENT_LOCALES` | Comma-separated subset `ru,en,zh`; `local` без значения собирает все три, plain JSON — `ru`, locale envelope — все переданные locale |
 | `SITE_URL` | При наличии заменяет `site.baseUrl`; завершающие `/` удаляются |
 | `ALLOW_INDEXING` | Только case-insensitive `true` разрешает индексацию |
 
@@ -81,7 +99,7 @@ CONTENT_ADAPTER=json CMS_CONTENT_FILE=content/export.json npm run build
 
 ## Мультиязычный контракт
 
-Русский — locale по умолчанию и сохраняет исходные адреса без префикса. Английский публикуется под `/en/`, китайский с HTML locale `zh-CN` — под `/zh/`. Это три статических представления одного набора logical routes: например, `/news/`, `/en/news/` и `/zh/news/` относятся к одной странице. Переключатель языка строится сервером и сохраняет logical route; JavaScript для перехода не требуется. Canonical указывает на текущую locale-версию, а `hreflang` связывает доступные варианты и `x-default` с русским адресом.
+Русский — locale по умолчанию и сохраняет исходные адреса без префикса. Английский публикуется под `/en/`, китайский с HTML locale `zh-CN` — под `/zh/`. Это статические представления одного набора logical routes: например, `/news/`, `/en/news/` и `/zh/news/` относятся к одной странице. Переключатель языка строится сервером и сохраняет logical route; JavaScript для перехода не требуется. Canonical указывает на текущую locale-версию, `hreflang` связывает фактически собранные варианты, а `x-default` указывает на русский адрес только если `ru` входит в выбранный subset.
 
 Текущая реализация разделяет два типа переводов:
 
@@ -90,7 +108,7 @@ CONTENT_ADAPTER=json CMS_CONTENT_FILE=content/export.json npm run build
 
 Exact-string каталоги покрывают именно текущий `local` bundle и не являются универсальным переводчиком CMS. Новое или изменённое русское поле, для которого нет точного ключа, останавливает EN/ZH build; молчаливого показа русского текста в основном содержании нет. Юридические названия и нормативные материалы нельзя объявлять официальными переводами: EN/ZH версии предназначены для информирования, а утверждённые русскоязычные материалы остаются авторитетными.
 
-Внешний `json` поэтому по умолчанию собирается только с `CONTENT_LOCALES=ru`. Указывать `CONTENT_LOCALES=ru,en,zh` можно лишь после того, как CMS export/adapter и редакционный процесс гарантируют полный перевод всех публикуемых строк. Для постоянной CMS-интеграции предпочтительно сопоставлять locale-записи по стабильным ID и logical routes на доверенной стороне, а не расширять exact-string каталоги вручную при каждой публикации. Такой locale-aware CMS adapter в репозиторий сейчас не внедрён.
+Plain JSON поэтому по умолчанию собирается только с `CONTENT_LOCALES=ru`. Для постоянно обновляемой CMS не расширяйте exact-string каталоги вручную при каждой публикации: экспортируйте `brhk-content-locales-v1` и сопоставляйте locale-записи по стабильным ID и logical routes на доверенной стороне. Envelope без `CONTENT_LOCALES` собирает все реально переданные locale; явное значение может выбрать их subset, но не может запросить отсутствующий bundle.
 
 CMS во всех языках должна сохранять стабильные `id`, logical `route`/`href`, ссылки на `media.id`, даты, workflow status и связи с документами. Локализуются пользовательские тексты и metadata; slug, route, media/source paths, provenance URL, телефоны, email, даты и технические статусы не переводятся. Любая смена logical route требует согласованной redirect-стратегии для всех трёх публичных префиксов.
 
@@ -102,9 +120,11 @@ Normalizer исключает запись, если:
 
 - `published === false`;
 - `draft === true`;
-- явно заданный `status`/`publicationStatus` не равен `published` или `live`.
+- любое из явно заданных полей `status`/`publicationStatus` не равно `published` или `live`.
 
 Для совместимости с локальными данными запись без workflow-поля считается публичной. Поэтому внешний CMS adapter обязан явно передавать статус и никогда не экспортировать preview/draft как запись без статуса.
+
+`published` и `draft` принимают только boolean; строки `"true"`/`"false"` являются ошибкой. `status`/`publicationStatus` при наличии должны быть непустыми строками. Если переданы оба status-поля, они обязаны совпадать после trim и приведения регистра; конфликт останавливает сборку вместо выбора одного значения. Raw boundary также проверяет типы top-level collections и форму каждой записи до filtering, поэтому malformed CMS object не может молча превратиться в пустой массив или исчезнуть из зелёной сборки.
 
 Новости дополнительно сортируются: сначала `featured`, затем по `publishedAt` от новых к старым. Validation проверяет уникальные ID/slug, безопасные внутренние маршруты, ISO dates и ссылки на существующие media IDs.
 
@@ -129,7 +149,7 @@ Build завершается ошибкой, если любой адрес из
 
 `docs/ROUTE-MAP.csv` остаётся картой 73 logical routes: строки для `/en` и `/zh` в ней намеренно не размножаются. `/sveden/` остаётся обязательным русским адресом; его информационные варианты доступны как `/en/sveden/` и `/zh/sveden/` и не заменяют оригинал.
 
-`/sveden/ovz/` нельзя экспортировать как пятнадцатый обязательный подраздел. Это сохранённый адрес прежней структуры, который направляет к объединённому `/sveden/objects/`. Руководство (`/sveden/managers/`) и педагогический состав (`/sveden/employees/`) должны оставаться раздельными CMS-узлами. Изменения к приказу № 1493, внесённые приказом Рособрнадзора № 920 от 30.04.2026 (регистрация № 86689, вступление в силу 01.09.2026), должны учитываться при mapping полей объединённого подраздела материально-технического обеспечения и доступной среды.
+`/sveden/ovz/` нельзя удалять или экспортировать как пятнадцатый обязательный подраздел. Это обязательный legacy-адрес прежней структуры с `group: 'legacy'`, который направляет к объединённому `/sveden/objects/`. Набор `group: 'mandatory'` точно равен 14 `SVEDEN_REQUIRED_ROUTES`; любые дополнительные записи допускаются только как legacy. Руководство (`/sveden/managers/`) и педагогический состав (`/sveden/employees/`) должны оставаться раздельными CMS-узлами. Изменения к приказу № 1493, внесённые приказом Рособрнадзора № 920 от 30.04.2026 (регистрация № 86689, вступление в силу 01.09.2026), должны учитываться при mapping полей объединённого подраздела материально-технического обеспечения и доступной среды.
 
 ШКИ и «Балет для всех» остаются элементами `programs` с `primary: false` и рендерятся внутри образования. Блок «Новые проекты» не добавляется.
 
@@ -143,7 +163,7 @@ Build завершается ошибкой, если любой адрес из
 - `list` с `items` и optional `ordered`;
 - `link` с root-relative или HTTPS `href` и `label`.
 
-Все тексты экранируются. Неизвестный блок пропускается; raw HTML не интерпретируется. Если CMS хранит HTML/portable text, преобразуйте его в этот allowlist на доверенной стороне. Не передавайте HTML как «уже безопасный» frontend field.
+Все тексты экранируются. Неизвестный или неполный block останавливает validation, чтобы CMS-материал не исчезал молча; raw HTML не интерпретируется. Если CMS хранит HTML/portable text, преобразуйте его в этот allowlist на доверенной стороне. Не передавайте HTML как «уже безопасный» frontend field.
 
 ## Медиа
 
@@ -166,13 +186,13 @@ Build не скачивает remote images. Значение `source: https://�
 Контракт уже содержит `events`, `employees` и `documents`, но локальные массивы пусты, потому что проверенные сведения не получены.
 
 - Published event с обязательным `href` попадает в listing `/events/` и получает отдельную HTML-страницу.
-- Employee records выводятся списком на `/sveden/employees/` (имя/title, роль/position, department и optional photo). Отдельных employee detail routes нет.
-- На `/documents/` активными ссылками становятся прошедшие publication normalization records с `href`; это включает `published` и `live`. До получения файлов остаются неподтверждённые названия без ссылок.
+- Employee records выводятся списком на `/sveden/employees/` (имя/title, роль/position, department и optional photo). Если соответствующий `svedenSections[]` одновременно содержит проверенные `body`/`content`, `sections` или `documents`, они выводятся перед списком сотрудников, а не заменяются им. Отдельных employee detail routes нет.
+- На `/documents/` активными ссылками становятся прошедшие publication normalization records с `href` и `fileType`; это включает `published` и `live`. Structured records выводятся независимо от optional placeholder-массива `pages['/documents/'].documents`. До получения файлов остаются неподтверждённые названия без ссылок.
 - `svedenSections` задаёт названия, URL и `group`. Все 14 `SVEDEN_REQUIRED_ROUTES` обязаны иметь `group: 'mandatory'`; `/sveden/ovz/` имеет `group: 'legacy'`. Для совпавшего детального route renderer умеет вывести `body`/`content` rich text, `sections` и `documents`; при их отсутствии используется page model из `pages`.
 - Тематическая страница без официального материала хранит `structureOnly: true`. Renderer явно сообщает, что это только структура будущего раздела; adapter не должен снимать флаг, пока не переданы и не проверены фактические сведения.
 - `site.institutionalNavigation` формирует отдельную группу «Сервисы и открытость». СОУТ находится на `/documents/sout/` как самостоятельная обязанность работодателя, а не как элемент `svedenSections` приказа № 1493.
 
-Nested `svedenSections[].documents` и article attachments проходят publication filtering, требуют `title` и безопасный root-relative/HTTPS/`mailto:`/`tel:` `href`. `svedenSections[].sections` проверяются как пары строк. Специфичные для выбранной CMS поля adapter всё равно должен преобразовать в этот allowlist до build.
+Nested `svedenSections[].documents` проходят publication filtering и требуют `title`, `fileType` и безопасный root-relative/HTTPS `href`; article attachments требуют `title` и безопасный root-relative/HTTPS `href`. `svedenSections[].sections` проверяются как пары строк. Специфичные для выбранной CMS поля adapter всё равно должен преобразовать в этот allowlist до build.
 
 Не заполняйте пустые коллекции вымышленными документами, ФИО, должностями, датами или событиями ради демонстрации.
 
@@ -182,9 +202,9 @@ Nested `svedenSections[].documents` и article attachments проходят publ
 2. Зафиксировать checksum и source metadata; не коммитить токены/персональные выгрузки.
 3. Преобразовать snapshot в полный `ContentBundle` JSON.
 4. Скопировать разрешённые local renditions в `public/`.
-5. Запустить `CONTENT_ADAPTER=json CMS_CONTENT_FILE=… CONTENT_LOCALES=ru npm run test`; после редакционной готовности полного EN/ZH набора повторить с `CONTENT_LOCALES=ru,en,zh`.
-6. Выполнить `npm run test:e2e`, `npm run test:a11y`, `npm run test:visual`.
-7. Сопоставить `dist/content-manifest.json` с CMS counts/routes/media.
+5. Запустить adapter-aware `CONTENT_ADAPTER=json CMS_CONTENT_FILE=… CONTENT_LOCALES=ru npm run verify:cms`; для проверенного locale envelope повторить с `CONTENT_LOCALES=ru,en,zh`.
+6. Развернуть Preview и выполнить HTTP/browser/accessibility/visual приёмку фактического CMS-контента. Полный `npm run verify` без `CONTENT_*` overrides остаётся regression gate принятого repository-managed snapshot и не заменяет CMS content acceptance. Существующие Playwright-сценарии частично знают local fixture и три locale; для plain RU CMS Preview используйте отдельную sample matrix/manual checklist или адаптируйте копию сценариев под фактический export, не выдавая local fixture checks за CMS acceptance.
+7. Сопоставить `dist/content-manifest.json` с опубликованными/нормализованными CMS counts/routes/media; raw→filtered расхождения и причины исключения записать в migration register.
 8. Проверить Preview deployment; только затем публиковать production.
 
 ## Что нужно получить от владельца CMS

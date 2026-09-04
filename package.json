@@ -10,11 +10,14 @@
     "dev": "node scripts/dev.mjs",
     "build": "node build.mjs",
     "validate:content": "node scripts/validate-content.mjs",
-    "test": "npm run build && node --test tests/build.test.mjs tests/content-contract.test.mjs tests/image-metadata.test.mjs",
+    "content:reference": "node scripts/export-reference-content.mjs",
+    "verify:cms": "npm run validate:content && npm run build && node scripts/verify-dist.mjs",
+    "test": "npm run build && node scripts/verify-dist.mjs && node --test tests/build.test.mjs tests/content-contract.test.mjs tests/handoff.test.mjs tests/image-metadata.test.mjs",
     "test:content": "node --test tests/content-contract.test.mjs",
     "test:e2e": "playwright test tests/e2e/site.spec.mjs tests/e2e/i18n.spec.mjs",
     "test:a11y": "playwright test tests/e2e/a11y.spec.mjs",
-    "test:visual": "playwright test tests/e2e/visual.spec.mjs"
+    "test:visual": "playwright test tests/e2e/visual.spec.mjs",
+    "verify": "npm test && npm run test:e2e && npm run test:a11y && npm run test:visual"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.13.0",

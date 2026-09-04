@@ -4,6 +4,7 @@ import { createHash } from 'node:crypto';
 import { existsSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import test from 'node:test';
+import { LOCALIZED_CONTENT_FORMAT } from '../src/content/contracts.mjs';
 import { loadContent } from '../src/content/load-content.mjs';
 import { REQUIRED_ROUTES, SVEDEN_REQUIRED_ROUTES } from '../src/content/required-routes.mjs';
 import { collectPublicRoutes } from '../src/content/validate.mjs';
@@ -515,6 +516,8 @@ test('json adapter drives the complete build and renders CMS collections into se
   };
   const jsonContent = structuredClone(content);
   jsonContent.site.baseUrl = 'https://json-build.invalid/';
+  jsonContent.newsItems[0].publishedAt = '2020-01-01';
+  jsonContent.newsItems[1].publishedAt = '2099-01-01';
   jsonContent.newsItems[0].gallery = [{
     image: 'initiation043Landscape',
     alt: 'Интеграционная фотография из media registry',
@@ -523,8 +526,10 @@ test('json adapter drives the complete build and renders CMS collections into se
   jsonContent.events = [...jsonContent.events, event];
   jsonContent.employees = [...jsonContent.employees, employee];
   jsonContent.documents = [...jsonContent.documents, document];
-  jsonContent.svedenSections = jsonContent.svedenSections.map((section) => section.href === '/sveden/common/'
-    ? {
+  delete jsonContent.pages['/documents/'].documents;
+  jsonContent.svedenSections = jsonContent.svedenSections.map((section) => {
+    if (section.href === '/sveden/common/') {
+      return {
         ...section,
         status: 'published',
         body: [
@@ -532,8 +537,16 @@ test('json adapter drives the complete build and renders CMS collections into se
           { type: 'paragraph', text: 'Проверенное содержимое обязательного раздела отдано серверным HTML.' },
           { type: 'list', items: ['Значение из CMS', 'Дата актуализации из CMS'] }
         ]
-      }
-    : section);
+      };
+    }
+    if (section.href === '/sveden/employees/') {
+      return {
+        ...section,
+        body: [{ type: 'paragraph', text: 'Проверенное вступление к сведениям о сотрудниках из CMS.' }]
+      };
+    }
+    return section;
+  });
 
   const runBuild = (env) => spawnSync(process.execPath, ['build.mjs'], {
     cwd: projectRoot,
@@ -566,6 +579,12 @@ test('json adapter drives the complete build and renders CMS collections into se
     assert.match(newsDetail, /Галерея из JSON CMS/);
     assert.match(newsDetail, /data-media-id="initiation043Landscape"/);
 
+    const newsListing = readRoute('/news/');
+    assert.ok(
+      newsListing.indexOf(jsonContent.newsItems[0].title) < newsListing.indexOf(jsonContent.newsItems[1].title),
+      'featured CMS news must stay ahead of a newer non-featured item in the editorial grid'
+    );
+
     const eventsListing = readRoute('/events/');
     assert.match(eventsListing, /data-cms-collection="events"/);
     assert.ok(eventsListing.includes(`href="${event.href}"`));
@@ -575,6 +594,7 @@ test('json adapter drives the complete build and renders CMS collections into se
     assert.match(employeesPage, /data-cms-collection="employees"/);
     assert.match(employeesPage, /Тестовый сотрудник JSON CMS/);
     assert.match(employeesPage, /Интеграционная должность/);
+    assert.match(employeesPage, /Проверенное вступление к сведениям о сотрудниках из CMS\./);
 
     const documentsPage = readRoute('/documents/');
     assert.match(documentsPage, /Тестовый документ JSON CMS/);
@@ -645,5 +665,91 @@ test('a non-Russian locale can be built independently with a complete manifest',
     delete localEnv.CONTENT_LOCALES;
     const restored = runBuild(localEnv);
     assert.equal(restored.status, 0, `Failed to restore the default locale build:\n${buildFailure(restored)}`);
+  }
+});
+
+test('localized JSON envelope builds reviewed locale bundles without exact-string catalogs', { concurrency: false }, () => {
+  const fixtureFile = join(projectRoot, `.tmp-content-locales-json-${process.pid}.json`);
+  const structuralFields = new Set([
+    'href', 'route', 'path', 'src', 'sourcePath', 'source', 'originalName', 'id', 'slug',
+    'image', 'coverImage', 'mobileImage', 'publicationStatus', 'status', 'rightsStatus',
+    'email', 'emailHref', 'phone', 'phoneHref', 'baseUrl', 'themeColor', 'publishedAt',
+    'updatedAt', 'startsAt', 'endsAt', 'fileType', 'editorialVariant', 'style'
+  ]);
+  const translateFixture = (value, field = '') => {
+    if (typeof value === 'string') {
+      return structuralFields.has(field) ? value : value.replace(/[А-Яа-яЁё]+/g, 'Translated');
+    }
+    if (Array.isArray(value)) return value.map((item) => translateFixture(item, field));
+    if (!value || typeof value !== 'object') return value;
+    return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, translateFixture(item, key)]));
+  };
+  const runBuild = (env) => spawnSync(process.execPath, ['build.mjs'], {
+    cwd: projectRoot,
+    env,
+    encoding: 'utf8',
+    maxBuffer: 10 * 1024 * 1024
+  });
+  const buildFailure = (result) => [result.stdout, result.stderr].filter(Boolean).join('\n');
+
+  const ru = structuredClone(content);
+  const en = translateFixture(ru);
+  en.site.locale = 'en';
+  en.pages['/about/'].title = 'A reviewed CMS-only English title';
+  const zh = translateFixture(ru);
+  zh.site.locale = 'zh';
+  zh.pages['/about/'].title = 'A reviewed CMS-only Chinese title';
+  const envelope = {
+    format: LOCALIZED_CONTENT_FORMAT,
+    defaultLocale: 'ru',
+    locales: { ru, en, zh }
+  };
+
+  try {
+    const localizedEnv = {
+      ...process.env,
+      CONTENT_ADAPTER: 'json',
+      CMS_CONTENT_FILE: fixtureFile,
+      SITE_URL: 'https://localized-json.invalid',
+      ALLOW_INDEXING: 'false'
+    };
+    delete localizedEnv.CONTENT_LOCALES;
+
+    const unresolvedLocaleEnvelope = structuredClone(envelope);
+    for (const bundle of Object.values(unresolvedLocaleEnvelope.locales)) {
+      bundle.media.forEach((asset) => { asset.rightsStatus = 'owned'; });
+    }
+    unresolvedLocaleEnvelope.locales.en.media[0].rightsStatus = 'restricted';
+    writeFileSync(fixtureFile, `${JSON.stringify(unresolvedLocaleEnvelope, null, 2)}\n`, 'utf8');
+    const indexingResult = runBuild({ ...localizedEnv, ALLOW_INDEXING: 'true' });
+    assert.notEqual(indexingResult.status, 0, 'Locale bundles must not disagree about media rights');
+    assert.match(buildFailure(indexingResult), /technical metadata must match the default locale/);
+
+    for (const bundle of Object.values(unresolvedLocaleEnvelope.locales)) {
+      bundle.media[0].rightsStatus = 'restricted';
+    }
+    writeFileSync(fixtureFile, `${JSON.stringify(unresolvedLocaleEnvelope, null, 2)}\n`, 'utf8');
+    const unresolvedRightsResult = runBuild({ ...localizedEnv, ALLOW_INDEXING: 'true' });
+    assert.notEqual(unresolvedRightsResult.status, 0, 'Indexable build must reject unresolved rights shared by every locale');
+    assert.match(buildFailure(unresolvedRightsResult), /ru: ALLOW_INDEXING=true requires resolved media rights/);
+
+    writeFileSync(fixtureFile, `${JSON.stringify(envelope, null, 2)}\n`, 'utf8');
+    const result = runBuild(localizedEnv);
+    assert.equal(result.status, 0, `Localized JSON build failed:\n${buildFailure(result)}`);
+
+    const manifest = JSON.parse(readFileSync(join(distRoot, 'content-manifest.json'), 'utf8'));
+    assert.equal(manifest.contentFormat, LOCALIZED_CONTENT_FORMAT);
+    assert.deepEqual(manifest.locales, ['ru', 'en', 'zh']);
+    assert.equal(manifest.routeCount, publicRoutes.length * 3);
+    assert.match(readRoute('/en/about/'), /A reviewed CMS-only English title/);
+    assert.match(readRoute('/zh/about/'), /A reviewed CMS-only Chinese title/);
+  } finally {
+    rmSync(fixtureFile, { force: true });
+    const localEnv = { ...process.env, CONTENT_ADAPTER: 'local', ALLOW_INDEXING: 'false' };
+    delete localEnv.CMS_CONTENT_FILE;
+    delete localEnv.CONTENT_LOCALES;
+    delete localEnv.SITE_URL;
+    const restored = runBuild(localEnv);
+    assert.equal(restored.status, 0, `Failed to restore local build after localized JSON test:\n${buildFailure(restored)}`);
   }
 });

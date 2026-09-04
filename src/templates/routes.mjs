@@ -27,7 +27,10 @@ function additionalPrograms(programs) {
 }
 
 function newestFirst(items) {
-  return [...items].sort((a, b) => String(b.publishedAt || '').localeCompare(String(a.publishedAt || '')));
+  return [...items].sort((a, b) => {
+    const byFeatured = Number(Boolean(b.featured)) - Number(Boolean(a.featured));
+    return byFeatured || String(b.publishedAt || '').localeCompare(String(a.publishedAt || ''));
+  });
 }
 
 function socialImage(mediaId) {
@@ -202,8 +205,11 @@ export function renderGeneric({ route, page, site, svedenSections, documents = [
   const svedenSection = svedenSections.find((section) => section.href === route);
   const verifiedSvedenContent = svedenContent(svedenSection);
   let body;
-  if (route === '/events/' && events.length) body = eventList(events);
-  else if (route === '/sveden/employees/' && employees.length) body = employeeList(employees);
+  if (route === '/documents/') body = documentList(page, documents);
+  else if (route === '/events/' && events.length) body = eventList(events);
+  else if (route === '/sveden/employees/' && (employees.length || verifiedSvedenContent)) {
+    body = `${verifiedSvedenContent}${employeeList(employees)}`;
+  }
   else if (verifiedSvedenContent) body = verifiedSvedenContent;
   else if (page.siteMap) body = navigationDirectory(site.navigation, route);
   else if (page.gallery) body = gallery(site.gallery);

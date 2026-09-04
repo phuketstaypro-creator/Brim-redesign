@@ -25,9 +25,10 @@ export function isPublishedRecord(record) {
   if (!isPlainObject(record)) return false;
   if (record.published === false || record.draft === true) return false;
 
-  const status = record.status ?? record.publicationStatus;
-  if (status === undefined || status === null || status === '') return true;
-  return publishedStatuses.has(String(status).trim().toLowerCase());
+  const statuses = [record.status, record.publicationStatus]
+    .filter((status) => status !== undefined && status !== null && status !== '');
+  if (!statuses.length) return true;
+  return statuses.every((status) => publishedStatuses.has(String(status).trim().toLowerCase()));
 }
 
 function normalizeRecord(record) {

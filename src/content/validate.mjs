@@ -11,6 +11,13 @@ const identifierPattern = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
 const rightsStatuses = new Set(MEDIA_RIGHTS_STATUSES);
 const editorialVariants = new Set(['featured', 'wide', 'portrait', 'square', 'standard']);
 const svedenGroups = new Set(['mandatory', 'legacy']);
+const officialLogo = Object.freeze({
+  src: '/assets/images/brhk-logo-full.png',
+  width: 1705,
+  height: 677
+});
+const requiredAdditionalProgramRoutes = Object.freeze(['/creative-industries/', '/ballet-for-all/']);
+const requiredLegacySvedenRoute = '/sveden/ovz/';
 const reservedLocaleRoutePrefixes = new Set(LOCALE_IDS
   .filter((locale) => locale !== DEFAULT_LOCALE)
   .map((locale) => localeConfig(locale).prefix.replace(/^\//, '').toLowerCase())
@@ -96,6 +103,14 @@ function requiredString(value, field, issues) {
   return true;
 }
 
+function optionalString(value, field, issues) {
+  if (value !== undefined && value !== null && typeof value !== 'string') {
+    issues.push(`${field} must be a string or null`);
+    return false;
+  }
+  return true;
+}
+
 function positiveInteger(value, field, issues) {
   if (!Number.isInteger(value) || value <= 0) {
     issues.push(`${field} must be a positive integer`);
@@ -127,6 +142,10 @@ function isSafeContentLink(value) {
     && /^(?:mailto:|tel:)[^\s]+$/i.test(value);
 }
 
+function isSafeResourceLink(value) {
+  return isSafePublicRoute(value) || isSafePublicAssetUrl(value) || isHttpUrl(value);
+}
+
 const unsafeRichTextHrefCharacters = /[\\\u0000-\u001f\u007f]/;
 const encodedPathSeparator = /%(?:25)*(?:2f|5c)/i;
 
@@ -153,9 +172,41 @@ function validateRichText(value, field, issues) {
   }
 
   value.forEach((block, index) => {
-    if (!isPlainObject(block) || block.type !== 'link') return;
-    if (!isSafeRichTextHref(block.href)) {
-      issues.push(`${field}[${index}].href must be a safe public or HTTPS URL`);
+    const prefix = `${field}[${index}]`;
+    if (typeof block === 'string') {
+      requiredString(block, prefix, issues);
+      return;
+    }
+    if (!isPlainObject(block)) {
+      issues.push(`${prefix} must be a rich-text block object or string`);
+      return;
+    }
+
+    const type = block.type;
+    if (!['paragraph', 'quote', 'heading', 'list', 'link'].includes(type)) {
+      issues.push(`${prefix}.type is not supported`);
+      return;
+    }
+
+    if (type === 'paragraph' || type === 'quote' || type === 'heading') {
+      requiredString(block.text, `${prefix}.text`, issues);
+    }
+    if (type === 'heading' && block.level !== undefined && ![2, 3].includes(Number(block.level))) {
+      issues.push(`${prefix}.level must be 2 or 3`);
+    }
+    if (type === 'list') {
+      const items = requiredArray(block.items, `${prefix}.items`, issues);
+      if (items && !items.length) issues.push(`${prefix}.items must contain at least one item`);
+      items?.forEach((item, itemIndex) => requiredString(item, `${prefix}.items[${itemIndex}]`, issues));
+      if (block.ordered !== undefined && typeof block.ordered !== 'boolean') {
+        issues.push(`${prefix}.ordered must be a boolean`);
+      }
+    }
+    if (type === 'link') {
+      requiredString(block.label, `${prefix}.label`, issues);
+      if (!isSafeRichTextHref(block.href)) {
+        issues.push(`${prefix}.href must be a safe public or HTTPS URL`);
+      }
     }
   });
 }
@@ -212,14 +263,15 @@ function validateNavigationTargets(items, field, routes, issues) {
   });
 }
 
-function validateLinkedItems(value, field, issues) {
+function validateLinkedItems(value, field, issues, { requireFileType = false } = {}) {
   if (value === null || value === undefined) return;
   const items = requiredArray(value, field, issues);
   items?.forEach((item, index) => {
     const prefix = `${field}[${index}]`;
     if (!requiredObject(item, prefix, issues)) return;
     requiredString(item.title, `${prefix}.title`, issues);
-    if (!isSafeContentLink(item.href)) issues.push(`${prefix}.href must be a safe public, HTTPS, mailto or tel URL`);
+    if (!isSafeResourceLink(item.href)) issues.push(`${prefix}.href must be a safe root-relative or HTTPS URL`);
+    if (requireFileType) requiredString(item.fileType, `${prefix}.fileType`, issues);
   });
 }
 
@@ -265,6 +317,11 @@ function validateSite(site, issues) {
     positiveInteger(logo.width, 'site.assets.logo.width', issues);
     positiveInteger(logo.height, 'site.assets.logo.height', issues);
     requiredString(logo.alt, 'site.assets.logo.alt', issues);
+    for (const [field, expected] of Object.entries(officialLogo)) {
+      if (logo[field] !== expected) {
+        issues.push(`site.assets.logo.${field} must preserve the approved official logo value ${JSON.stringify(expected)}`);
+      }
+    }
   }
 
   validateLinkCollection(site.navigation, 'site.navigation', issues, { maxDepth: 1 });
@@ -349,6 +406,9 @@ function validateSite(site, issues) {
     requiredString(item.image, `${prefix}.image`, issues);
     requiredString(item.alt, `${prefix}.alt`, issues);
     requiredString(item.caption, `${prefix}.caption`, issues);
+    if (item.compact !== undefined && typeof item.compact !== 'boolean') {
+      issues.push(`${prefix}.compact must be a boolean`);
+    }
   });
 }
 
@@ -532,16 +592,28 @@ export function validateContent(content) {
     }
     requiredString(page.title, `pages[${JSON.stringify(route)}].title`, issues);
     requiredString(page.description, `pages[${JSON.stringify(route)}].description`, issues);
-    if (page.structureOnly !== undefined && typeof page.structureOnly !== 'boolean') {
-      issues.push(`pages[${JSON.stringify(route)}].structureOnly must be a boolean`);
+    for (const field of ['kicker', 'seoTitle']) {
+      optionalString(page[field], `pages[${JSON.stringify(route)}].${field}`, issues);
     }
-    if (page.siteMap !== undefined && typeof page.siteMap !== 'boolean') {
-      issues.push(`pages[${JSON.stringify(route)}].siteMap must be a boolean`);
+    for (const field of ['structureOnly', 'siteMap', 'gallery', 'sveden']) {
+      if (page[field] !== undefined && typeof page[field] !== 'boolean') {
+        issues.push(`pages[${JSON.stringify(route)}].${field} must be a boolean`);
+      }
     }
     validateSectionPairs(page.sections, `pages[${JSON.stringify(route)}].sections`, issues, { nullable: false });
     if (page.documents !== null && page.documents !== undefined) {
       const documentNames = requiredArray(page.documents, `pages[${JSON.stringify(route)}].documents`, issues);
       documentNames?.forEach((title, index) => requiredString(title, `pages[${JSON.stringify(route)}].documents[${index}]`, issues));
+    }
+  }
+
+  for (const [route, flag] of [
+    ['/sveden/', 'sveden'],
+    ['/gallery/', 'gallery'],
+    ['/sitemap/', 'siteMap']
+  ]) {
+    if (content.pages[route]?.[flag] !== true) {
+      issues.push(`pages[${JSON.stringify(route)}].${flag} must be true for the required renderer`);
     }
   }
 
@@ -553,15 +625,19 @@ export function validateContent(content) {
   validateUniqueField(content.documents, 'id', 'documents', issues);
   validateUniqueField(content.svedenSections, 'slug', 'svedenSections', issues);
 
-  for (const collection of ['programs', 'newsItems', 'events', 'employees', 'documents']) {
+  for (const collection of ['programs', 'newsItems', 'events', 'documents']) {
     content[collection].forEach((item, index) => {
       if (!isPlainObject(item)) {
         issues.push(`${collection}[${index}] must be an object`);
         return;
       }
-      requiredString(item.title ?? item.name, `${collection}[${index}].title`, issues);
+      requiredString(item.title, `${collection}[${index}].title`, issues);
     });
   }
+  content.employees.forEach((item, index) => {
+    if (!isPlainObject(item)) return;
+    requiredString(item.name ?? item.title, `employees[${index}].name`, issues);
+  });
 
   content.programs.forEach((item, index) => {
     const prefix = `programs[${index}]`;
@@ -573,6 +649,11 @@ export function validateContent(content) {
     requiredString(item.imageAlt, `${prefix}.imageAlt`, issues);
     if (typeof item.primary !== 'boolean') issues.push(`${prefix}.primary must be a boolean`);
   });
+  for (const route of requiredAdditionalProgramRoutes) {
+    const program = content.programs.find((item) => item.href === route);
+    if (!program) issues.push(`programs must preserve ${route} inside the education section`);
+    else if (program.primary !== false) issues.push(`programs item ${route} must keep primary false`);
+  }
 
   content.newsItems.forEach((item, index) => {
     const prefix = `newsItems[${index}]`;
@@ -597,13 +678,14 @@ export function validateContent(content) {
         if (galleryItem.caption !== undefined && galleryItem.caption !== null && typeof galleryItem.caption !== 'string') {
           issues.push(`${galleryPrefix}.caption must be a string or null`);
         }
+        if (galleryItem.compact !== undefined && typeof galleryItem.compact !== 'boolean') {
+          issues.push(`${galleryPrefix}.compact must be a boolean`);
+        }
       });
     }
     validateLinkedItems(item.attachments, `${prefix}.attachments`, issues);
-    for (const field of ['seoTitle', 'seoDescription']) {
-      if (item[field] !== null && item[field] !== undefined && typeof item[field] !== 'string') {
-        issues.push(`${prefix}.${field} must be a string or null`);
-      }
+    for (const field of ['date', 'coverCaption', 'author', 'seoTitle', 'seoDescription', 'sourceLabel', 'contentStatus', 'alt', 'coverAlt']) {
+      optionalString(item[field], `${prefix}.${field}`, issues);
     }
     if (item.image || item.coverImage) {
       requiredString(item.alt ?? item.coverAlt, `${prefix}.coverAlt`, issues);
@@ -623,16 +705,31 @@ export function validateContent(content) {
     const prefix = `events[${index}]`;
     if (item.slug !== undefined) validateId(item.slug, `${prefix}.slug`, issues);
     validateRoute(item.href, `${prefix}.href`, issues);
+    for (const field of ['description', 'category', 'date', 'seoTitle', 'seoDescription', 'coverCaption', 'alt', 'coverAlt']) {
+      optionalString(item[field], `${prefix}.${field}`, issues);
+    }
     validateDateFields(item, ['publishedAt', 'updatedAt', 'startsAt', 'endsAt'], prefix, issues);
     validateRichText(item.body, `${prefix}.body`, issues);
     validateLinkedItems(item.attachments, `${prefix}.attachments`, issues);
+    if (item.image || item.coverImage) requiredString(item.alt ?? item.coverAlt, `${prefix}.coverAlt`, issues);
+  });
+
+  content.employees.forEach((item, index) => {
+    const prefix = `employees[${index}]`;
+    for (const field of ['role', 'position', 'department', 'alt']) {
+      optionalString(item[field], `${prefix}.${field}`, issues);
+    }
   });
 
   content.documents.forEach((item, index) => {
     const prefix = `documents[${index}]`;
+    optionalString(item.fileType, `${prefix}.fileType`, issues);
     validateDateFields(item, ['publishedAt', 'updatedAt'], prefix, issues);
-    if (item.href !== undefined && item.href !== null && item.href !== '' && !isSafeContentLink(item.href)) {
-      issues.push(`${prefix}.href must be a safe public, HTTPS, mailto or tel URL`);
+    if (item.href !== undefined && item.href !== null && item.href !== '' && !isSafeResourceLink(item.href)) {
+      issues.push(`${prefix}.href must be a safe root-relative or HTTPS URL`);
+    }
+    if (item.href !== undefined && item.href !== null && item.href !== '') {
+      requiredString(item.fileType, `${prefix}.fileType`, issues);
     }
   });
 
@@ -647,14 +744,29 @@ export function validateContent(content) {
       }
       seenSvedenRoutes.add(item.href);
     }
-    validateLinkedItems(item.documents, `${prefix}.documents`, issues);
+    validateLinkedItems(item.documents, `${prefix}.documents`, issues, { requireFileType: true });
     validateSectionPairs(item.sections, `${prefix}.sections`, issues);
     validateRichText(item.body, `${prefix}.body`, issues);
+    validateRichText(item.content, `${prefix}.content`, issues);
+    if (typeof item.href === 'string' && !Object.hasOwn(content.pages, item.href)) {
+      issues.push(`${prefix}.href must have a matching pages entry so the section is rendered`);
+    }
   });
   for (const route of SVEDEN_REQUIRED_ROUTES) {
     const section = content.svedenSections.find((item) => item.href === route);
     if (!section) issues.push(`svedenSections is missing required item ${route}`);
     else if (section.group !== 'mandatory') issues.push(`svedenSections required item ${route} must use group mandatory`);
+  }
+  for (const section of content.svedenSections.filter((item) => item.group === 'mandatory')) {
+    if (!SVEDEN_REQUIRED_ROUTES.includes(section.href)) {
+      issues.push(`svedenSections item ${section.href} cannot use group mandatory outside SVEDEN_REQUIRED_ROUTES`);
+    }
+  }
+  const legacySvedenSection = content.svedenSections.find((item) => item.href === requiredLegacySvedenRoute);
+  if (!legacySvedenSection) {
+    issues.push(`svedenSections is missing required legacy item ${requiredLegacySvedenRoute}`);
+  } else if (legacySvedenSection.group !== 'legacy') {
+    issues.push(`svedenSections required legacy item ${requiredLegacySvedenRoute} must use group legacy`);
   }
 
   const routes = collectPublicRoutes(content);

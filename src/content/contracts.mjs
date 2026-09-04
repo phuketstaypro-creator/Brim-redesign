@@ -8,6 +8,10 @@
 
 export const CONTENT_SCHEMA_VERSION = '1.0.0';
 
+export const LOCALIZED_CONTENT_FORMAT = 'brhk-content-locales-v1';
+
+export const CONTENT_LOCALE_IDS = Object.freeze(['ru', 'en', 'zh']);
+
 export const CONTENT_COLLECTION_KEYS = Object.freeze([
   'programs',
   'newsItems',
@@ -50,7 +54,7 @@ export const MEDIA_RIGHTS_STATUSES = Object.freeze([
  * @property {string} rightsStatus One of MEDIA_RIGHTS_STATUSES.
  * @property {string|null} credit Credit supplied with the source, if any.
  * @property {MediaVariant[]} variants Responsive alternatives.
- * @property {MediaVariant & {variants?: MediaVariant[]}|null} [mobile]
+ * @property {(MediaVariant & {variants: MediaVariant[]})|null} [mobile]
  */
 
 /**
@@ -65,6 +69,16 @@ export const MEDIA_RIGHTS_STATUSES = Object.freeze([
  * @property {Record<string, unknown>[]} documents
  * @property {Record<string, unknown>[]} svedenSections
  * @property {MediaAsset[]} media
+ */
+
+/**
+ * Optional build-time envelope for CMS exports that already contain reviewed
+ * locale-specific bundles. Plain ContentBundle JSON remains supported.
+ *
+ * @typedef {object} LocalizedContentEnvelope
+ * @property {'brhk-content-locales-v1'} format
+ * @property {'ru'} defaultLocale
+ * @property {{ru: ContentBundle, en?: ContentBundle, zh?: ContentBundle}} locales
  */
 
 export class ContentContractError extends Error {
